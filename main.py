@@ -4,24 +4,18 @@ from datetime import datetime
 
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher
-from aiogram.types.base import InputFile
 from aiogram.utils.executor import start_webhook
 import re
 from enum import Enum
-from aiogram.types.chat import ChatActions
 
 TOKEN = os.environ['TOKEN']
 
-WEBHOOK_HOST = 'https://deploy-chust-bot.herokuapp.com'  # name your app
 WEBHOOK_PATH = '/webhook/'
-
 WEBAPP_HOST = '0.0.0.0'
 WEBAPP_PORT = os.environ.get('PORT')
-IS_LOCALHOST = os.environ.get('IS_LOCALHOST')
-
-if IS_LOCALHOST:
-    WEBHOOK_HOST = 'https://compleo.serveousercontent.com'
-
+# WEBHOOK_HOST должен содержать адрес на который будут направляться оповещения.
+# например: 'https://deploy-chust-bot.herokuapp.com'
+WEBHOOK_HOST = os.environ.get('WEBHOOK_HOST')
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
 logging.basicConfig(level=logging.INFO)
