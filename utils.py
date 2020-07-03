@@ -14,6 +14,7 @@ class BotStates(StatesGroup):
     DEFAULT = State()
     WAIT_STYLE = State()
     WAIT_CONTENT = State()
+    PROCESSING = State()
 
 
 class ImageTypes(Enum):

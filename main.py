@@ -1,13 +1,16 @@
 import logging
+import random
 import os
 
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher, FSMContext
+from aiogram.types import InputMediaPhoto
 from aiogram.utils.executor import start_webhook
 
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 
+from core import core
 from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes
 
 TOKEN = os.environ['TOKEN']
@@ -79,6 +82,29 @@ async def set_style_handler(message: types.Message, state: FSMContext):
         f'Если хотите использовать свою картинку, то прикрепите её к следующему сообщению вместо номера.')
 
 
+@dp.message_handler(commands='результат', state='*')
+async def get_result_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    if 'content_file_id' not in user_data:
+        await message.answer("Сначала задайте фото командой '/Фото'")
+        return
+    #if 'style_file_id' not in user_data:
+    #    await message.answer("Сначала задайте стиль командой '/Стиль'")
+    #    return
+    await BotStates.PROCESSING.set()
+    # content_file: InputMediaPhoto
+    content_file = InputMediaPhoto(user_data['content_file_id'])
+    # content_file: InputFile
+    content_file = await bot.get_file(user_data['content_file_id'])
+    content_filename = 'tmp/' + user_data['content_file_id'] + '.jpg'
+    await content_file.download(content_filename)
+    result_filename = core(content_filename,'')
+    os.remove(content_filename)
+    await BotStates.DEFAULT.set()
+    await message.answer_photo(open(result_filename, 'rb'))
+    os.remove(result_filename)
+
+
 @dp.message_handler(state=BotStates.WAIT_STYLE)
 async def set_style(message: types.Message, state: FSMContext):
     style_id = parse_style_id(message.text)
@@ -86,8 +112,8 @@ async def set_style(message: types.Message, state: FSMContext):
         await message.answer('Не могу понять, какой стиль вы хотите задать.')
         return
     await state.update_data(style_file_id=style_id)
-    await message.answer('Задан стиль \'' + default_styles[style_id]['name'] + '\'.')
     await BotStates.DEFAULT.set()
+    await message.answer('Задан стиль \'' + default_styles[style_id]['name'] + '\'.')
 
 
 @dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_STYLE)
