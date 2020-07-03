@@ -1,3 +1,5 @@
+from asyncio import sleep
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +10,7 @@ import torchvision.models as models
 import random
 
 #Размер к которому будут отмасштабированы картинки.
-imsize = 128
+imsize = 256
 # Набор преобразований перед входом на сеть (изменение размера и преобразование из картинки в тензор).
 preprocessor = transforms.Compose([
     transforms.Resize((imsize, imsize)),
@@ -161,12 +163,12 @@ class VggFeaturesWithStyleTransferLosses(nn.Module):
             # Если текущий слой свёрточный, то после него надо добавить loss слои.
             if isinstance(layer, nn.Conv2d):
                 # Чтобы ускорить вычисления, будем добавлять расчёт функций потерь не после каждого свёрточного слоя.
-                if i==1:
+                if i == 5:
                     target = self.layers(content_img).detach()
                     content_loss = ContentLoss(target)
                     self.layers.add_module("content_loss_{}".format(i), content_loss)
                     self.content_loss_layers.append(content_loss)
-                if True:
+                if i < 4:
                     target_feature = self.layers(style_img).detach()
                     style_loss = StyleLoss(target_feature)
                     self.layers.add_module("style_loss_{}".format(i), style_loss)
@@ -196,7 +198,7 @@ class VggFeaturesWithStyleTransferLosses(nn.Module):
         return output
 
 
-def style_transfer(model, input_img, num_steps=300,
+async def style_transfer(model, input_img, num_steps=300,
                    content_weight=1, style_weight=1000000, std_out=True):
     """
     Выполнить перенос стиля.
@@ -215,7 +217,7 @@ def style_transfer(model, input_img, num_steps=300,
     :return: FloatTensor
         Результат переноса стиля.
     """
-    optimizer = optim.LBFGS([input_img.requires_grad_()])
+    optimizer = optim.AdamW([input_img.requires_grad_()],lr=0.1)
     print('Optimizing..')
     cur_step = [0]
 
@@ -226,21 +228,23 @@ def style_transfer(model, input_img, num_steps=300,
         model(input_img)
         loss = content_weight * model.content_loss + style_weight * model.style_loss
         loss.backward()
-        if std_out:
-            print("run {}:".format(cur_step))
-            print('Style Loss : {:4f} Content Loss: {:4f}'.format(
-                model.style_loss.item(), model.content_loss.item()))
         cur_step[0] += 1
         return loss
 
     while cur_step[0] < num_steps:
         optimizer.step(closure)
+        if std_out:
+            loss = style_weight * model.style_loss.item() + content_weight * model.content_loss.item()
+            print("run {}:".format(cur_step), 'Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
+                style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
+        await sleep(0)
+
     # a last correction...
     input_img.data.clamp_(0, 1)
     return input_img
 
 
-def core(content_path: str, style_path: str, tmp_dir='tmp/'):
+async def core(content_path: str, style_path: str, tmp_dir='tmp/'):
     """
     Выполнить перенос стиля.
     :param content_path: str
@@ -255,6 +259,6 @@ def core(content_path: str, style_path: str, tmp_dir='tmp/'):
     style_img = load_square_image(style_path)
     res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
     model = VggFeaturesWithStyleTransferLosses(content_img, style_img)
-    output = style_transfer(model, content_img.clone(), 100, 1, 1E+6)
+    output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
     unloader(output.squeeze(0)).save(res_filename)
     return res_filename

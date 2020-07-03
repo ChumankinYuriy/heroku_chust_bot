@@ -101,7 +101,9 @@ async def get_result_handler(message: types.Message, state: FSMContext):
         style_file = await bot.get_file(user_data['style_file_id'])
         style_filename = 'tmp/' + user_data['style_file_id'] + '.png'
         await style_file.download(style_filename)
-    result_filename = core(content_filename,style_filename)
+    await message.answer(
+        'Обрабатываю изображения, это может занять несколько минут. Пришлю результат как только всё будет готово.')
+    result_filename = await core(content_filename,style_filename)
     os.remove(content_filename)
     if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
     await BotStates.DEFAULT.set()
