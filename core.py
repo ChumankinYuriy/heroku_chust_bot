@@ -6,7 +6,7 @@ import torch.optim as optim
 from PIL import Image
 import torchvision.transforms as transforms
 import torchvision.models as models
-from IPython.display import clear_output
+#from IPython.display import clear_output
 import random
 
 #Размер к которому будут отмасштабированы картинки.
@@ -192,7 +192,7 @@ def style_transfer(model, input_img, num_steps=300,
         loss.backward()
         cur_step[0] += 1
         if cur_step[0] % 50 == 0:
-          clear_output(wait=True)
+          #clear_output(wait=True)
           print("run {}:".format(cur_step))
           print('Style Loss : {:4f} Content Loss: {:4f}'.format(
             model.style_loss.item(), model.content_loss.item()))
