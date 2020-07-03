@@ -1,4 +1,3 @@
-import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,7 +5,6 @@ import torch.optim as optim
 from PIL import Image
 import torchvision.transforms as transforms
 import torchvision.models as models
-from IPython.display import clear_output
 import random
 
 #Размер к которому будут отмасштабированы картинки.
@@ -18,16 +16,7 @@ preprocessor = transforms.Compose([
     ])
 # Преобразование из тензора в картинку.
 unloader = transforms.ToPILImage()
-vgg_file = 'vgg.cnn'
 
-#cnn = None
-# Загрузка предобученной vgg
-#if os.path.isfile(vgg_file):
-#    cnn = torch.load(vgg_file)
-#else:
-#    cnn = models.vgg19(pretrained=True).features.eval()
-#    torch.save(cnn, vgg_file)
-#cnn.eval()
 
 def load_square_image(path):
     """
@@ -41,23 +30,6 @@ def load_square_image(path):
     image = transforms.CenterCrop(min(image.width, image.height))(image)
     image = preprocessor(image).unsqueeze(0)
     return image
-
-
-def core(content_path: str, style_path: str, tmp_dir='tmp/'):
-    """
-    Выполнить перенос стиля.
-    :param content_path: str
-        Путь до файла контента.
-    :param style_path: str
-        Путь до файла стиля.
-    :param tmp_dir: str
-        Папка для хранения временного файла результата.
-    :return: Путь и имя файла с результатом переноса стиля.
-    """
-    content = load_square_image(content_path)
-    res_filename = tmp_dir + str(random.randint(0,0,999999)) + '.png'
-    unloader(content.squeeze(0)).save(res_filename)
-    return res_filename
 
 
 # Класс функции потерь содержания для переноса стиля.
@@ -268,3 +240,21 @@ def style_transfer(model, input_img, num_steps=300,
     return input_img
 
 
+def core(content_path: str, style_path: str, tmp_dir='tmp/'):
+    """
+    Выполнить перенос стиля.
+    :param content_path: str
+        Путь до файла контента.
+    :param style_path: str
+        Путь до файла стиля.
+    :param tmp_dir: str
+        Папка для хранения временного файла результата.
+    :return: Путь и имя файла с результатом переноса стиля.
+    """
+    content_img = load_square_image(content_path)
+    style_img = load_square_image(style_path)
+    res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
+    model = VggFeaturesWithStyleTransferLosses(content_img, style_img)
+    output = style_transfer(model, content_img.clone(), 100, 1, 1E+6)
+    unloader(output.squeeze(0)).save(res_filename)
+    return res_filename

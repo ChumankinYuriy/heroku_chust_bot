@@ -22,7 +22,6 @@ WEBAPP_PORT = os.environ.get('PORT')
 # например: 'https://deploy-chust-bot.herokuapp.com'
 WEBHOOK_HOST = os.environ.get('WEBHOOK_HOST')
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
@@ -88,18 +87,23 @@ async def get_result_handler(message: types.Message, state: FSMContext):
     if 'content_file_id' not in user_data:
         await message.answer("Сначала задайте фото командой '/Фото'")
         return
-    #if 'style_file_id' not in user_data:
-    #    await message.answer("Сначала задайте стиль командой '/Стиль'")
-    #    return
+    if 'style_file_id' not in user_data:
+        await message.answer("Сначала задайте стиль командой '/Стиль'")
+        return
     await BotStates.PROCESSING.set()
-    # content_file: InputMediaPhoto
-    content_file = InputMediaPhoto(user_data['content_file_id'])
-    # content_file: InputFile
     content_file = await bot.get_file(user_data['content_file_id'])
-    content_filename = 'tmp/' + user_data['content_file_id'] + '.jpg'
+    content_filename = 'tmp/' + user_data['content_file_id'] + '.png'
     await content_file.download(content_filename)
-    result_filename = core(content_filename,'')
+    style_filename = None
+    if user_data['style_file_id'] in default_styles:
+        style_filename = default_styles[user_data['style_file_id']]['file']
+    else:
+        style_file = await bot.get_file(user_data['style_file_id'])
+        style_filename = 'tmp/' + user_data['style_file_id'] + '.png'
+        await style_file.download(style_filename)
+    result_filename = core(content_filename,style_filename)
     os.remove(content_filename)
+    if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
     await BotStates.DEFAULT.set()
     await message.answer_photo(open(result_filename, 'rb'))
     os.remove(result_filename)
