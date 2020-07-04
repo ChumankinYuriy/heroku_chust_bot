@@ -2,7 +2,8 @@ import asyncio
 import random
 from datetime import datetime
 
-from core import load_square_image, VggFeaturesWithStyleTransferLosses, style_transfer, unloader, PRETRAINED_FILENAME
+from core import load_square_image, VggFeaturesWithStyleTransferLosses, style_transfer, unloader
+from main import PRETRAINED_FILENAME
 
 
 async def main():

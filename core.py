@@ -1,3 +1,4 @@
+import logging
 import os
 from asyncio import sleep
 
@@ -270,10 +271,13 @@ async def core(content_path: str, style_path: str, pre_trained_file: str, tmp_di
         Папка для хранения временного файла результата.
     :return: Путь и имя файла с результатом переноса стиля.
     """
+    logging.info('Processing images...')
     content_img = load_square_image(content_path)
     style_img = load_square_image(style_path)
     res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
     model = VggFeaturesWithStyleTransferLosses(content_img, style_img, pre_trained_file)
-    output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
-    unloader(output.squeeze(0)).save(res_filename)
+    #output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
+    #unloader(output.squeeze(0)).save(res_filename)
+    unloader(content_img.squeeze(0)).save(res_filename)
+    logging.info('Images were processed.')
     return res_filename
