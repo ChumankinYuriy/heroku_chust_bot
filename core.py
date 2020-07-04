@@ -232,28 +232,30 @@ async def style_transfer(model, input_img, num_steps=300,
         Результат переноса стиля.
     """
     optimizer = optim.AdamW([input_img.requires_grad_()],lr=0.1)
-    print('Optimizing..')
+    logging.debug('Optimizing..')
     cur_step = [0]
 
     def closure():
         # correct the values of updated input image
+        logging.debug('Closure function was called')
         input_img.data.clamp_(0, 1)
         optimizer.zero_grad()
         model(input_img)
         loss = content_weight * model.content_loss + style_weight * model.style_loss
         loss.backward()
         cur_step[0] += 1
+        logging.debug('Closure function is over')
         return loss
 
     while cur_step[0] < num_steps:
         optimizer.step(closure)
         if std_out:
             loss = style_weight * model.style_loss.item() + content_weight * model.content_loss.item()
-            logging.info('run {}: Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
+            logging.debug('run {}: Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
                 cur_step, style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
         #await sleep(0)
 
-    # a last correction...
+    logging.info('Optimizing is over.')
     input_img.data.clamp_(0, 1)
     return input_img
 
@@ -271,7 +273,7 @@ async def core(content_path: str, style_path: str, pre_trained_file: str, tmp_di
         Папка для хранения временного файла результата.
     :return: Путь и имя файла с результатом переноса стиля.
     """
-    logging.info('Processing images...')
+    logging.debug('Processing images...')
     content_img = load_square_image(content_path)
     style_img = load_square_image(style_path)
     res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
@@ -280,5 +282,5 @@ async def core(content_path: str, style_path: str, pre_trained_file: str, tmp_di
     logging.info('CNN was loaded.')
     output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
     unloader(output.squeeze(0)).save(res_filename)
-    logging.info('Images were processed.')
+    logging.debug('Images were processed.')
     return res_filename
