@@ -52,8 +52,8 @@ async def processing(message: types.Message, state: FSMContext):
     await message.answer('Подождите, сначала я должен обработать изображения.')
 
 
-@dp.message_handler(commands='start')
-async def start_handler(message: types.Message):
+@dp.message_handler(commands='start', state='*')
+async def start_handler(message: types.Message, state: FSMContext):
     await bot.send_message(
         message.chat.id,
         f'Приветствую! Это демонтрационный бот для переноса стиля\n' + help_str +
@@ -63,8 +63,8 @@ async def start_handler(message: types.Message):
         disable_web_page_preview=True)
 
 
-@dp.message_handler(commands='справка')
-async def help_handler(message: types.Message):
+@dp.message_handler(commands='справка', state='*')
+async def help_handler(message: types.Message, state: FSMContext):
     await bot.send_message(
         message.chat.id,
         help_str +
