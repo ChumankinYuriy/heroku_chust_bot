@@ -12,9 +12,8 @@ import random
 
 #Размер к которому будут отмасштабированы картинки.
 imsize = 256
-if os.environ['IMSIZE'] is not None:
+if 'IMSIZE' in os.environ:
     imsize = int(os.environ['IMSIZE'])
-
 
 # Набор преобразований перед входом на сеть (изменение размера и преобразование из картинки в тензор).
 preprocessor = transforms.Compose([
@@ -133,16 +132,26 @@ class Normalization(nn.Module):
 
 # Модель для получения сети, которая рассчитывает функции потерь для переноса стиля.
 class VggFeaturesWithStyleTransferLosses(nn.Module):
-    def __init__(self, content_img, style_img):
+
+    def __init__(self, content_img, style_img, pre_init_filename=None):
         """
         Конструктор.
         :param content_img: FloatTensor
             Содержание.
         :param style_img: FloatTensor
             Стиль.
+        :param pre_init_filename: FloatTensor
+            Имя файла с предобученной на выделение признаков сетью.
+            None - используется предобученная vgg11.
+            При развёртывании на heroku этот параметр следует указать,
+            т.к. vgg11 не помещается в бесплатно предоставляемую оперативную память.
         """
         super(VggFeaturesWithStyleTransferLosses, self).__init__()
-        cnn = models.vgg11(pretrained=True).features.eval()
+        if pre_init_filename is None:
+            cnn = models.vgg11(pretrained=True).features.eval()
+        else:
+            cnn = torch.load(pre_init_filename)
+
         self.layers = nn.Sequential(Normalization())
         self.content_loss_layers = []
         self.style_loss_layers = []
@@ -160,8 +169,7 @@ class VggFeaturesWithStyleTransferLosses(nn.Module):
             elif isinstance(layer, nn.BatchNorm2d):
                 name = 'bn_{}'.format(i)
             else:
-                raise RuntimeError(
-                    'Unrecognized layer: {}'.format(layer.__class__.__name__))
+                continue
 
             self.layers.add_module(name, layer)
 
@@ -249,13 +257,15 @@ async def style_transfer(model, input_img, num_steps=300,
     return input_img
 
 
-async def core(content_path: str, style_path: str, tmp_dir='tmp/'):
+async def core(content_path: str, style_path: str, pre_trained_file: str, tmp_dir='tmp/'):
     """
     Выполнить перенос стиля.
     :param content_path: str
         Путь до файла контента.
     :param style_path: str
         Путь до файла стиля.
+    :param pre_trained_file: str
+        Путь до файла с сетью предварительно обученной извлекать признаки из изображений.
     :param tmp_dir: str
         Папка для хранения временного файла результата.
     :return: Путь и имя файла с результатом переноса стиля.
@@ -263,7 +273,7 @@ async def core(content_path: str, style_path: str, tmp_dir='tmp/'):
     content_img = load_square_image(content_path)
     style_img = load_square_image(style_path)
     res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
-    model = VggFeaturesWithStyleTransferLosses(content_img, style_img)
+    model = VggFeaturesWithStyleTransferLosses(content_img, style_img, pre_trained_file)
     output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
     unloader(output.squeeze(0)).save(res_filename)
     return res_filename

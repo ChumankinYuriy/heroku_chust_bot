@@ -5,26 +5,36 @@ import os
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils.executor import start_webhook
-
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
-
 from core import core
-from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes
+from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes, download_file
 
+# Url для загрузки предобученной сети выделения признаков.
+PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1l7Lyy9a_nC9ngyCgHwy_Ex9LtO3FA4Bh&export=download'
+# Имя файла в котором хранится предобученная сеть.
+PRETRAINED_FILENAME = 'style_transfer.cnn'
+# Токен подключения к боту.
 TOKEN = os.environ['TOKEN']
-
+# Относительный url приложения.
 WEBHOOK_PATH = '/webhook/'
+# Фильтр с которого принимаются запросы.
 WEBAPP_HOST = '0.0.0.0'
+# Порт на котором следует принимать запросы.
 WEBAPP_PORT = os.environ.get('PORT')
 # WEBHOOK_HOST должен содержать адрес на который будут направляться оповещения.
 # например: 'https://deploy-chust-bot.herokuapp.com'
 WEBHOOK_HOST = os.environ.get('WEBHOOK_HOST')
+# Абсолютный url приложения.
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+
+# Конфигурация Приложения.
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 logging.basicConfig(level=logging.INFO)
+
+# Строка справки.
 help_str = \
         "При работе со мной используйте команды:\n" + \
         "* '/Справка' - для просмотра справки\n" + \
@@ -170,7 +180,7 @@ async def get_result_handler(message: types.Message, state: FSMContext):
         await style_file.download(style_filename)
     await message.answer(
         'Обрабатываю изображения, это может занять несколько минут. Пришлю результат как только всё будет готово.')
-    result_filename = await core(content_filename,style_filename)
+    result_filename = await core(content_filename, style_filename, PRETRAINED_FILENAME)
     os.remove(content_filename)
     if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
     await BotStates.DEFAULT.set()
@@ -179,14 +189,15 @@ async def get_result_handler(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state='*')
-async def echo(message: types.Message, state: FSMContext):
+async def random_handler(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id,
                            "Для общения со мной используйте команды. Просмотреть список команд: '/Справка'")
 
 
 async def on_startup(dp):
+    if not os.path.isfile(PRETRAINED_FILENAME):
+        download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
     await bot.set_webhook(WEBHOOK_URL)
-    pass
 
 
 async def on_shutdown(dp):
