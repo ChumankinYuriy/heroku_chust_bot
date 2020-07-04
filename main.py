@@ -1,5 +1,4 @@
 import logging
-import random
 import os
 
 from aiogram import Bot, types, md
