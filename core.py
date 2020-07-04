@@ -249,9 +249,9 @@ async def style_transfer(model, input_img, num_steps=300,
         optimizer.step(closure)
         if std_out:
             loss = style_weight * model.style_loss.item() + content_weight * model.content_loss.item()
-            print("run {}:".format(cur_step), 'Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
-                style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
-        await sleep(0.1)
+            logging.info('run {}: Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
+                cur_step, style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
+        #await sleep(0)
 
     # a last correction...
     input_img.data.clamp_(0, 1)
@@ -275,9 +275,10 @@ async def core(content_path: str, style_path: str, pre_trained_file: str, tmp_di
     content_img = load_square_image(content_path)
     style_img = load_square_image(style_path)
     res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
+    logging.info('Loading CNN.')
     model = VggFeaturesWithStyleTransferLosses(content_img, style_img, pre_trained_file)
-    #output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
-    #unloader(output.squeeze(0)).save(res_filename)
-    unloader(content_img.squeeze(0)).save(res_filename)
+    logging.info('CNN was loaded.')
+    output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
+    unloader(output.squeeze(0)).save(res_filename)
     logging.info('Images were processed.')
     return res_filename
