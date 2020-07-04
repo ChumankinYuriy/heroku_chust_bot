@@ -26,13 +26,39 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 logging.basicConfig(level=logging.INFO)
+help_str = \
+        "При работе со мной используйте команды:\n" + \
+        "* '/Справка' - для просмотра справки\n" + \
+        "* '/Фото' - для задания фото на которое будет перенесён стиль\n" + \
+        "* '/Стиль' - для задания стиля\n" + \
+        "* '/Результат' - для выполнения переноса стиля." + \
+        " Перед выполнением переноса стиля необходимо задать /Фото и /Стиль\n" + \
+        "* '/Покажи' - для просмотра изображения, через пробел необходимо указать, что именно вы хотите увидеть." + \
+        " Можно просматривать фото, стиль, изображения стандартных стилей \n(пример: '/Покажи фото')\n" + \
+        " Для просмотра стандартного стиля укажите его номер\n(пример: '/Покажи 1') \n"
+
+
+@dp.message_handler(content_types=[types.ContentType.ANY], state=BotStates.PROCESSING)
+async def echo(message: types.Message, state: FSMContext):
+    await message.answer('Подождите, сначала я должен обработать изображения.')
 
 
 @dp.message_handler(commands='start')
 async def welcome(message: types.Message):
     await bot.send_message(
         message.chat.id,
-        f'Приветствую! Это демонтрационный бот для переноса стиля\n'
+        f'Приветствую! Это демонтрационный бот для переноса стиля\n' + help_str +
+        f'Подробная информация на '
+        f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}',
+        parse_mode=types.ParseMode.HTML,
+        disable_web_page_preview=True)
+
+
+@dp.message_handler(commands='справка')
+async def welcome(message: types.Message):
+    await bot.send_message(
+        message.chat.id,
+        help_str +
         f'Подробная информация на '
         f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}',
         parse_mode=types.ParseMode.HTML,
@@ -64,6 +90,9 @@ async def show(message: types.Message, state: FSMContext):
             return
         caption = 'Выбранное фото'
         photo = get_photo(user_data['content_file_id'])
+    elif image_type == ImageTypes.RESULT:
+        await message.answer('Для получения результата воспользуйтесь командой \'/Результат\'.')
+        return
     await message.answer_photo(photo, caption=caption)
 
 
@@ -79,36 +108,6 @@ async def set_style_handler(message: types.Message, state: FSMContext):
         f'\nЧтобы выбрать стиль напишите его номер. '
         f'Чтобы посмотреть стиль напишите команду \'\\Покажи\' перед номером.\n'
         f'Если хотите использовать свою картинку, то прикрепите её к следующему сообщению вместо номера.')
-
-
-@dp.message_handler(commands='результат', state='*')
-async def get_result_handler(message: types.Message, state: FSMContext):
-    user_data = await state.get_data()
-    if 'content_file_id' not in user_data:
-        await message.answer("Сначала задайте фото командой '/Фото'")
-        return
-    if 'style_file_id' not in user_data:
-        await message.answer("Сначала задайте стиль командой '/Стиль'")
-        return
-    await BotStates.PROCESSING.set()
-    content_file = await bot.get_file(user_data['content_file_id'])
-    content_filename = 'tmp/' + user_data['content_file_id'] + '.png'
-    await content_file.download(content_filename)
-    style_filename = None
-    if user_data['style_file_id'] in default_styles:
-        style_filename = default_styles[user_data['style_file_id']]['file']
-    else:
-        style_file = await bot.get_file(user_data['style_file_id'])
-        style_filename = 'tmp/' + user_data['style_file_id'] + '.png'
-        await style_file.download(style_filename)
-    await message.answer(
-        'Обрабатываю изображения, это может занять несколько минут. Пришлю результат как только всё будет готово.')
-    result_filename = await core(content_filename,style_filename)
-    os.remove(content_filename)
-    if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
-    await BotStates.DEFAULT.set()
-    await message.answer_photo(open(result_filename, 'rb'))
-    os.remove(result_filename)
 
 
 @dp.message_handler(state=BotStates.WAIT_STYLE)
@@ -145,6 +144,37 @@ async def content_photo_handler(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=[types.ContentType.PHOTO])
 async def random_photo_handler(message: types.Message):
     await bot.send_message(message.chat.id, 'Принял фотографию, но не понял зачем.')
+
+
+@dp.message_handler(commands='результат', state='*')
+@dp.async_task
+async def get_result_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    if 'content_file_id' not in user_data:
+        await message.answer("Сначала задайте фото командой '/Фото'")
+        return
+    if 'style_file_id' not in user_data:
+        await message.answer("Сначала задайте стиль командой '/Стиль'")
+        return
+    await BotStates.PROCESSING.set()
+    content_file = await bot.get_file(user_data['content_file_id'])
+    content_filename = 'tmp/' + user_data['content_file_id'] + '.png'
+    await content_file.download(content_filename)
+    style_filename = None
+    if user_data['style_file_id'] in default_styles:
+        style_filename = default_styles[user_data['style_file_id']]['file']
+    else:
+        style_file = await bot.get_file(user_data['style_file_id'])
+        style_filename = 'tmp/' + user_data['style_file_id'] + '.png'
+        await style_file.download(style_filename)
+    await message.answer(
+        'Обрабатываю изображения, это может занять несколько минут. Пришлю результат как только всё будет готово.')
+    result_filename = await core(content_filename,style_filename)
+    os.remove(content_filename)
+    if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
+    await BotStates.DEFAULT.set()
+    await message.answer_photo(open(result_filename, 'rb'))
+    os.remove(result_filename)
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state='*')
