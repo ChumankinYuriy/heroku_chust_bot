@@ -4,7 +4,6 @@ import os
 
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher, FSMContext
-from aiogram.types import InputMediaPhoto
 from aiogram.utils.executor import start_webhook
 
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -39,12 +38,12 @@ help_str = \
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state=BotStates.PROCESSING)
-async def echo(message: types.Message, state: FSMContext):
+async def processing(message: types.Message, state: FSMContext):
     await message.answer('Подождите, сначала я должен обработать изображения.')
 
 
 @dp.message_handler(commands='start')
-async def welcome(message: types.Message):
+async def start_handler(message: types.Message):
     await bot.send_message(
         message.chat.id,
         f'Приветствую! Это демонтрационный бот для переноса стиля\n' + help_str +
@@ -55,7 +54,7 @@ async def welcome(message: types.Message):
 
 
 @dp.message_handler(commands='справка')
-async def welcome(message: types.Message):
+async def help_handler(message: types.Message):
     await bot.send_message(
         message.chat.id,
         help_str +
@@ -66,7 +65,7 @@ async def welcome(message: types.Message):
 
 
 @dp.message_handler(commands='покажи', state='*')
-async def show(message: types.Message, state: FSMContext):
+async def show_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     style_id = parse_style_id(message.text)
     image_type = parse_image_type(message.text)
@@ -106,7 +105,7 @@ async def set_style_handler(message: types.Message, state: FSMContext):
         message.chat.id,
         f'Я могу оформить ваше фото в таком стиле:\n' + styles +
         f'\nЧтобы выбрать стиль напишите его номер. '
-        f'Чтобы посмотреть стиль напишите команду \'\\Покажи\' перед номером.\n'
+        f'Чтобы посмотреть стиль напишите команду \'/Покажи\' перед номером.\n'
         f'Если хотите использовать свою картинку, то прикрепите её к следующему сообщению вместо номера.')
 
 
@@ -125,11 +124,12 @@ async def set_style(message: types.Message, state: FSMContext):
 async def style_photo_handler(message: types.Message, state: FSMContext):
     file = await bot.get_file(message.photo[-1].file_id)
     await state.update_data(style_file_id=file.file_id)
+    await BotStates.DEFAULT.set()
     await message.answer('Задан новый стиль')
 
 
-@dp.message_handler(commands='фото')
-async def set_content_handler(message: types.Message):
+@dp.message_handler(commands='фото', state='*')
+async def set_content_handler(message: types.Message, state: FSMContext):
     await BotStates.WAIT_CONTENT.set()
     await message.answer(f'К следующему сообщению прикрепите фото на которое хотите перенести стиль.')
 
@@ -138,6 +138,7 @@ async def set_content_handler(message: types.Message):
 async def content_photo_handler(message: types.Message, state: FSMContext):
     file = await bot.get_file(message.photo[-1].file_id)
     await state.update_data(content_file_id=file.file_id)
+    await BotStates.DEFAULT.set()
     await message.answer('Задано новое фото для переноса стиля')
 
 
@@ -179,7 +180,8 @@ async def get_result_handler(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state='*')
 async def echo(message: types.Message, state: FSMContext):
-    await bot.send_message(message.chat.id, 'Для общения со мной используйте команды.')
+    await bot.send_message(message.chat.id,
+                           "Для общения со мной используйте команды. Просмотреть список команд: '/Справка'")
 
 
 async def on_startup(dp):

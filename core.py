@@ -1,3 +1,4 @@
+import os
 from asyncio import sleep
 
 import torch
@@ -11,6 +12,10 @@ import random
 
 #Размер к которому будут отмасштабированы картинки.
 imsize = 256
+if os.environ['IMSIZE'] is not None:
+    imsize = int(os.environ['IMSIZE'])
+
+
 # Набор преобразований перед входом на сеть (изменение размера и преобразование из картинки в тензор).
 preprocessor = transforms.Compose([
     transforms.Resize((imsize, imsize)),
