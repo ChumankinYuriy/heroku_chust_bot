@@ -158,7 +158,7 @@ async def random_photo_handler(message: types.Message):
 
 
 @dp.message_handler(commands='результат', state='*')
-@dp.async_task
+#@dp.async_task
 async def get_result_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     if 'content_file_id' not in user_data:

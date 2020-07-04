@@ -255,7 +255,7 @@ async def style_transfer(model, input_img, num_steps=300,
                 cur_step, style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
         #await sleep(0)
 
-    logging.info('Optimizing is over.')
+    logging.debug('Optimizing is over.')
     input_img.data.clamp_(0, 1)
     return input_img
 
@@ -277,9 +277,9 @@ async def core(content_path: str, style_path: str, pre_trained_file: str, tmp_di
     content_img = load_square_image(content_path)
     style_img = load_square_image(style_path)
     res_filename = tmp_dir + str(random.randint(0, 999999)) + '.png'
-    logging.info('Loading CNN.')
+    logging.debug('Loading CNN.')
     model = VggFeaturesWithStyleTransferLosses(content_img, style_img, pre_trained_file)
-    logging.info('CNN was loaded.')
+    logging.debug('CNN was loaded.')
     output = await style_transfer(model, content_img.clone(), 100, 1, 1E+6)
     unloader(output.squeeze(0)).save(res_filename)
     logging.debug('Images were processed.')
