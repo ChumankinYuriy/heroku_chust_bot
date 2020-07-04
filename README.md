@@ -1,3 +1,12 @@
+# Профиль бота в telegram: @chustransfer_bot
+# Бот расположен по [ссылке](https://dashboard.heroku.com/apps/deploy-chust-bot/)
+
+
+
+
+
+
+
 # Deploy [Heroku](https://www.heroku.com/) Bot
 
 ## Подготовка
