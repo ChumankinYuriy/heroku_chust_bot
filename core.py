@@ -253,7 +253,7 @@ async def style_transfer(model, input_img, num_steps=300,
             loss = style_weight * model.style_loss.item() + content_weight * model.content_loss.item()
             logging.debug('run {}: Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
                 cur_step, style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
-        #await sleep(0)
+        await sleep(0)
 
     logging.debug('Optimizing is over.')
     input_img.data.clamp_(0, 1)
