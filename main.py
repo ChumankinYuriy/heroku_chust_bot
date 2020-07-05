@@ -7,14 +7,13 @@ from aiogram.utils.executor import start_webhook
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
-from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes, download_file
+from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes, download_file, \
+    PRETRAINED_FILENAME, PRETRAINED_URL
 
-# Url для загрузки предобученной сети выделения признаков.
-PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1l7Lyy9a_nC9ngyCgHwy_Ex9LtO3FA4Bh&export=download'
-# Имя файла в котором хранится предобученная сеть.
-PRETRAINED_FILENAME = 'style_transfer.cnn'
 # Токен подключения к боту.
-TOKEN = os.environ['TOKEN']
+TOKEN = os.environ['TOKEN'] if 'TOKEN' in os.environ else None
+# Аккаунт на который будет отправляться обратная связь.
+FEEDBACK_CHAT_ID = os.environ['FEEDBACK_CHAT_ID'] if 'FEEDBACK_CHAT_ID' in os.environ else None
 # Относительный url приложения.
 WEBHOOK_PATH = '/webhook/'
 # Фильтр с которого принимаются запросы.
@@ -23,7 +22,7 @@ WEBAPP_HOST = '0.0.0.0'
 WEBAPP_PORT = os.environ.get('PORT')
 # WEBHOOK_HOST должен содержать адрес на который будут направляться оповещения.
 # например: 'https://deploy-chust-bot.herokuapp.com'
-WEBHOOK_HOST = os.environ.get('WEBHOOK_HOST')
+WEBHOOK_HOST = os.environ['WEBHOOK_HOST'] if 'WEBHOOK_HOST' in os.environ else None
 # Абсолютный url приложения.
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
@@ -33,17 +32,20 @@ dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 logging.basicConfig(level=logging.DEBUG)
 
-# Строка справки.
+# Строки справки.
 help_str = \
         "При работе со мной используйте команды:\n" + \
-        "* '/Справка' - для просмотра справки\n" + \
-        "* '/Фото' - для задания фото на которое будет перенесён стиль\n" + \
-        "* '/Стиль' - для задания стиля\n" + \
-        "* '/Результат' - для выполнения переноса стиля." + \
-        " Перед выполнением переноса стиля необходимо задать /Фото и /Стиль\n" + \
-        "* '/Покажи' - для просмотра изображения, через пробел необходимо указать, что именно вы хотите увидеть." + \
-        " Можно просматривать фото, стиль, изображения стандартных стилей \n(пример: '/Покажи фото')\n" + \
-        " Для просмотра стандартного стиля укажите его номер\n(пример: '/Покажи 1') \n"
+        "* '/справка' - для просмотра справки;\n" + \
+        "* '/фото' - для задания фото на которое будет перенесён стиль;\n" + \
+        "* '/стиль' - для задания стиля;\n" + \
+        "* '/результат' - для выполнения переноса стиля;" + \
+        "* '/покажи' - для просмотра изображения, через пробел необходимо указать, что именно вы хотите увидеть."
+
+help_result_str = "Для переноса стиля воспользуйтесь командой '/результат'.\n" +\
+                  "Во время обработки изображения будут обрезаны до квадратных."
+
+help_print_str = "Можно просматривать фото, стиль, изображения стандартных стилей\n(пример: '/покажи фото')\n" + \
+        "Для просмотра стандартного стиля укажите его номер\n(пример: '/покажи 1')."
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state=BotStates.PROCESSING)
@@ -53,8 +55,8 @@ async def processing(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands='start', state='*')
 async def start_handler(message: types.Message, state: FSMContext):
-    await bot.send_message(
-        message.chat.id,
+    await BotStates.DEFAULT.set()
+    await message.answer(
         f'Приветствую! Это демонтрационный бот для переноса стиля\n' + help_str +
         f'Подробная информация на '
         f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}',
@@ -64,8 +66,8 @@ async def start_handler(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands='справка', state='*')
 async def help_handler(message: types.Message, state: FSMContext):
-    await bot.send_message(
-        message.chat.id,
+    await BotStates.DEFAULT.set()
+    await message.answer(
         help_str +
         f'Подробная информация на '
         f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}',
@@ -75,9 +77,14 @@ async def help_handler(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands='покажи', state='*')
 async def show_handler(message: types.Message, state: FSMContext):
+    text = message.text.replace('/покажи', '')
     user_data = await state.get_data()
-    style_id = parse_style_id(message.text)
-    image_type = parse_image_type(message.text)
+    style_id = parse_style_id(text)
+    image_type = parse_image_type(text)
+    await BotStates.DEFAULT.set()
+    if not text:
+        await message.answer(help_print_str)
+        return
     if (style_id is None) and (image_type is None):
         await message.answer('Не могу понять, что именно вы просите показать.')
         return
@@ -88,18 +95,18 @@ async def show_handler(message: types.Message, state: FSMContext):
         photo = get_photo(style_id)
     elif image_type == ImageTypes.STYLE:
         if 'style_file_id' not in user_data:
-            await message.answer('Сначала задайте стиль командой \'/Стиль\'.')
+            await message.answer('Сначала задайте стиль командой \'/стиль\'.')
             return
         caption = 'Выбранный стиль'
         photo = get_photo(user_data['style_file_id'])
     elif image_type == ImageTypes.CONTENT:
         if 'content_file_id' not in user_data:
-            await message.answer('Сначала задайте фото командой \'/Фото\'.')
+            await message.answer('Сначала задайте фото командой \'/фото\'.')
             return
         caption = 'Выбранное фото'
         photo = get_photo(user_data['content_file_id'])
     elif image_type == ImageTypes.RESULT:
-        await message.answer('Для получения результата воспользуйтесь командой \'/Результат\'.')
+        await message.answer('Для получения результата воспользуйтесь командой \'/результат\'.')
         return
     await message.answer_photo(photo, caption=caption)
 
@@ -114,7 +121,7 @@ async def set_style_handler(message: types.Message, state: FSMContext):
         message.chat.id,
         f'Я могу оформить ваше фото в таком стиле:\n' + styles +
         f'\nЧтобы выбрать стиль напишите его номер. '
-        f'Чтобы посмотреть стиль напишите команду \'/Покажи\' перед номером.\n'
+        f'Чтобы посмотреть стиль напишите команду \'/покажи\' перед номером.\n'
         f'Если хотите использовать свою картинку, то прикрепите её к следующему сообщению вместо номера.')
 
 
@@ -126,7 +133,13 @@ async def set_style(message: types.Message, state: FSMContext):
         return
     await state.update_data(style_file_id=style_id)
     await BotStates.DEFAULT.set()
-    await message.answer('Задан стиль \'' + default_styles[style_id]['name'] + '\'.')
+    user_data = await state.get_data()
+    answer = 'Задан стиль \'' + default_styles[style_id]['name'] + '\'.\n'
+    if 'content_file_id' not in user_data:
+        answer += "Задайте фото на которое будет перенесён стиль командой '/фото'."
+    else:
+        answer += help_result_str
+    await message.answer(answer)
 
 
 @dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_STYLE)
@@ -134,7 +147,13 @@ async def style_photo_handler(message: types.Message, state: FSMContext):
     file = await bot.get_file(message.photo[-1].file_id)
     await state.update_data(style_file_id=file.file_id)
     await BotStates.DEFAULT.set()
-    await message.answer('Задан новый стиль')
+    user_data = await state.get_data()
+    answer = 'Задан новый стиль\n'
+    if 'content_file_id' not in user_data:
+        answer += "Задайте фото на которое будет перенесён стиль командой '/фото'."
+    else:
+        answer += help_result_str
+    await message.answer(answer)
 
 
 @dp.message_handler(commands='фото', state='*')
@@ -148,7 +167,13 @@ async def content_photo_handler(message: types.Message, state: FSMContext):
     file = await bot.get_file(message.photo[-1].file_id)
     await state.update_data(content_file_id=file.file_id)
     await BotStates.DEFAULT.set()
-    await message.answer('Задано новое фото для переноса стиля')
+    user_data = await state.get_data()
+    answer = 'Задано новое фото на которое будет перенесён стиль.\n'
+    if 'style_file_id' not in user_data:
+        answer += "Задайте стиль командой '/стиль'."
+    else:
+        answer += help_result_str
+    await message.answer(answer)
 
 
 @dp.message_handler(content_types=[types.ContentType.PHOTO])
@@ -161,10 +186,10 @@ async def random_photo_handler(message: types.Message):
 async def get_result_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     if 'content_file_id' not in user_data:
-        await message.answer("Сначала задайте фото командой '/Фото'")
+        await message.answer("Сначала задайте фото командой '/фото'")
         return
     if 'style_file_id' not in user_data:
-        await message.answer("Сначала задайте стиль командой '/Стиль'")
+        await message.answer("Сначала задайте стиль командой '/стиль'")
         return
     await BotStates.PROCESSING.set()
     content_file = await bot.get_file(user_data['content_file_id'])
@@ -182,15 +207,23 @@ async def get_result_handler(message: types.Message, state: FSMContext):
     result_filename = await core(content_filename, style_filename, PRETRAINED_FILENAME)
     os.remove(content_filename)
     if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
-    await BotStates.DEFAULT.set()
-    await message.answer_photo(open(result_filename, 'rb'))
+    await message.answer_photo(open(result_filename, 'rb'),
+                               'Обработка завершена. Вы довольны результатом? Отвечать не обязательно 🙂')
+    await BotStates.WAIT_FEEDBACK.set()
     os.remove(result_filename)
+
+
+@dp.message_handler(state=BotStates.WAIT_FEEDBACK)
+async def feedback_handler(message: types.Message, state: FSMContext):
+    await BotStates.DEFAULT.set()
+    await message.answer("Спасибо за обратную связь.")
+    if FEEDBACK_CHAT_ID is not None:
+        await bot.send_message(FEEDBACK_CHAT_ID, "#отзыв @" + message.chat.username + ":\n" + message.text)
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state='*')
 async def random_handler(message: types.Message, state: FSMContext):
-    await bot.send_message(message.chat.id,
-                           "Для общения со мной используйте команды. Просмотреть список команд: '/Справка'")
+    await message.answer("Для общения со мной используйте команды. Просмотреть список команд: '/справка'.")
 
 
 async def on_startup(dp):

@@ -4,6 +4,10 @@ import re
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from pip._vendor import requests
 
+# Url для загрузки предобученной сети выделения признаков.
+PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1l7Lyy9a_nC9ngyCgHwy_Ex9LtO3FA4Bh&export=download'
+# Имя файла в котором хранится предобученная сеть.
+PRETRAINED_FILENAME = 'style_transfer.cnn'
 # Стандартные стили.
 default_styles = {
     1: {'name': 'Ван-Гог, Звёздная ночь', 'file': 'styles/1.jpg'},
@@ -17,6 +21,7 @@ class BotStates(StatesGroup):
     DEFAULT = State()       # Свободен.
     WAIT_STYLE = State()    # Ожидает задание стиля.
     WAIT_CONTENT = State()  # Ожидает задания содержания.
+    WAIT_FEEDBACK = State()  # Ожидает отзыва пользователя.
     PROCESSING = State()    # Обрабатывает изображения.
 
 

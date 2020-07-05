@@ -12,17 +12,24 @@ import torchvision.models as models
 import random
 
 #Размер к которому будут отмасштабированы картинки.
-imsize = 256
-if 'IMSIZE' in os.environ:
-    imsize = int(os.environ['IMSIZE'])
+proc_imsize = 256
+if 'PROC_IMSIZE' in os.environ:
+    proc_imsize = int(os.environ['PROC_IMSIZE'])
+
+out_imsize = 512
+if 'OUT_IMSIZE' in os.environ:
+    out_imsize = int(os.environ['OUT_IMSIZE'])
 
 # Набор преобразований перед входом на сеть (изменение размера и преобразование из картинки в тензор).
 preprocessor = transforms.Compose([
-    transforms.Resize((imsize, imsize)),
+    transforms.Resize((proc_imsize, proc_imsize)),
     transforms.ToTensor()
     ])
 # Преобразование из тензора в картинку.
-unloader = transforms.ToPILImage()
+unloader = transforms.Compose([
+    transforms.ToPILImage(),
+    transforms.Resize(out_imsize, Image.BICUBIC)
+    ])
 
 
 def load_square_image(path):
@@ -253,7 +260,7 @@ async def style_transfer(model, input_img, num_steps=300,
             loss = style_weight * model.style_loss.item() + content_weight * model.content_loss.item()
             logging.debug('run {}: Style Loss : {:4f} Content Loss: {:4f} Summary: {:4f}'.format(
                 cur_step, style_weight * model.style_loss.item(), content_weight * model.content_loss.item(), loss))
-        await sleep(0)
+        await sleep(0.1)
 
     logging.debug('Optimizing is over.')
     input_img.data.clamp_(0, 1)
