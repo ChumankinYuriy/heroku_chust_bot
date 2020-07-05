@@ -203,7 +203,7 @@ async def get_result_handler(message: types.Message, state: FSMContext):
         style_filename = 'tmp/' + user_data['style_file_id'] + '.png'
         await style_file.download(style_filename)
     await message.answer(
-        'Обрабатываю изображения, это может занять несколько минут. Пришлю результат как только всё будет готово.')
+        'Обрабатываю изображения, это займёт несколько минут. Пришлю результат как только всё будет готово.')
     result_filename = await core(content_filename, style_filename, PRETRAINED_FILENAME)
     os.remove(content_filename)
     if user_data['style_file_id'] not in default_styles: os.remove(style_filename)

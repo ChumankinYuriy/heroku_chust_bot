@@ -5,14 +5,21 @@ from aiogram.dispatcher.filters.state import StatesGroup, State
 from pip._vendor import requests
 
 # Url для загрузки предобученной сети выделения признаков.
-PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1l7Lyy9a_nC9ngyCgHwy_Ex9LtO3FA4Bh&export=download'
+PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1fAHu8nHH6c0ykQZd0EaFHnRhZENfAbh2&export=download'
 # Имя файла в котором хранится предобученная сеть.
 PRETRAINED_FILENAME = 'style_transfer.cnn'
 # Стандартные стили.
 default_styles = {
-    1: {'name': 'Ван-Гог, Звёздная ночь', 'file': 'styles/1.jpg'},
-    2: {'name': 'Клод Монэ, Маки', 'file': 'styles/2.jpg'},
-    3: {'name': 'Кацусики Хокусай, Большая волна в Канагаве', 'file': 'styles/3.jpg'},
+    1: {'name': 'Кубизм', 'file': 'styles/1.jpg'},
+    2: {'name': 'Импрессионизм', 'file': 'styles/2.jpg'},
+    3: {'name': 'Постимпрессионизм', 'file': 'styles/3.jpg'},
+    4: {'name': 'Акварель', 'file': 'styles/4.jpg'},
+    5: {'name': 'Хохлома', 'file': 'styles/5.jpg'},
+    6: {'name': 'Гжель', 'file': 'styles/6.jpg'},
+    7: {'name': 'Золотые узоры', 'file': 'styles/7.jpg'},
+    8: {'name': 'Листва', 'file': 'styles/8.jpg'},
+    9: {'name': 'Кора', 'file': 'styles/9.jpg'},
+    10: {'name': 'Лёд', 'file': 'styles/10.jpg'},
 }
 
 
@@ -59,7 +66,7 @@ def parse_style_id(text):
         id стиля, если id найден в тексте.
         None если id не найден в тексте.
     """
-    match = re.match('.*([1-3]).*', text.lower())
+    match = re.match('.*([1-9][0-9]*).*', text.lower())
     if (match is not None) and (int(match.group(1)) in default_styles):
         return int(match.group(1))
 

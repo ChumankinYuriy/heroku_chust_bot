@@ -184,12 +184,12 @@ class VggFeaturesWithStyleTransferLosses(nn.Module):
             # Если текущий слой свёрточный, то после него надо добавить loss слои.
             if isinstance(layer, nn.Conv2d):
                 # Чтобы ускорить вычисления, будем добавлять расчёт функций потерь не после каждого свёрточного слоя.
-                if i == 5:
+                if i == 4:
                     target = self.layers(content_img).detach()
                     content_loss = ContentLoss(target)
                     self.layers.add_module("content_loss_{}".format(i), content_loss)
                     self.content_loss_layers.append(content_loss)
-                if i < 4:
+                if i < 6:
                     target_feature = self.layers(style_img).detach()
                     style_loss = StyleLoss(target_feature)
                     self.layers.add_module("style_loss_{}".format(i), style_loss)
