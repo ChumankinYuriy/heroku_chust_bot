@@ -41,6 +41,12 @@ def load_square_image(path):
         Загруженная и обрезанная картинка.
     """
     image = Image.open(path)
+    # Если изображение имеет альфа канал, то уберём его.
+    if len(image.split()) > 3:
+        image.load()
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        background.paste(image, mask=image.split()[3])  # 3 is the alpha channel
+        image = background
     image = transforms.CenterCrop(min(image.width, image.height))(image)
     image = preprocessor(image).unsqueeze(0)
     return image
