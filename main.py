@@ -3,12 +3,14 @@ import os
 
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher, FSMContext
+from aiogram.types import ReplyKeyboardRemove, User
 from aiogram.utils.executor import start_webhook
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
+from keyboards import style_kb, init_main_keyboard, feedback_kb
 from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes, download_file, \
-    PRETRAINED_FILENAME, PRETRAINED_URL
+    PRETRAINED_FILENAME, PRETRAINED_URL, CommandText, DataKeys
 
 # Токен подключения к боту.
 TOKEN = os.environ['TOKEN'] if 'TOKEN' in os.environ else None
@@ -48,9 +50,52 @@ help_print_str = "Можно просматривать фото, стиль, и
         "Для просмотра стандартного стиля укажите его номер\n(пример: '/покажи 1')."
 
 
+async def run_processing(message: types.Message, user_data: dict):
+    if DataKeys.CONTENT_FILE_ID not in user_data:
+        await message.answer("Сначала необходимо выбрать фото.",
+                             reply_markup=init_main_keyboard(user_data))
+        return
+    if DataKeys.STYLE_FILE_ID not in user_data:
+        await message.answer("Сначала необходимо выбрать стиль.",
+                             reply_markup=init_main_keyboard(user_data))
+        return
+    await BotStates.PROCESSING.set()
+    content_file = await bot.get_file(user_data[DataKeys.CONTENT_FILE_ID])
+    content_filename = 'tmp/' + user_data[DataKeys.CONTENT_FILE_ID] + '.png'
+    await content_file.download(content_filename)
+    style_filename = None
+    if user_data[DataKeys.STYLE_FILE_ID] in default_styles:
+        style_filename = default_styles[user_data[DataKeys.STYLE_FILE_ID]]['file']
+    else:
+        style_file = await bot.get_file(user_data[DataKeys.STYLE_FILE_ID])
+        style_filename = 'tmp/' + user_data[DataKeys.STYLE_FILE_ID] + '.png'
+        await style_file.download(style_filename)
+    await message.answer('Обрабатываю фото, это займёт несколько минут. '
+                         + 'Пришлю результат как только всё будет готово.')
+    result_filename = await core(content_filename, style_filename, PRETRAINED_FILENAME)
+    os.remove(content_filename)
+    if user_data[DataKeys.STYLE_FILE_ID] not in default_styles:
+        os.remove(style_filename)
+    await message.answer_photo(open(result_filename, 'rb'),
+                               'Обработка завершена. Если хотите, то следующим сообщением можете оставить отзыв 🙂',
+                               reply_markup=init_main_keyboard(user_data))
+    await BotStates.WAIT_FEEDBACK.set()
+    os.remove(result_filename)
+
+
 @dp.message_handler(content_types=[types.ContentType.ANY], state=BotStates.PROCESSING)
 async def processing(message: types.Message, state: FSMContext):
     await message.answer('Подождите, сначала я должен обработать изображения.')
+
+
+@dp.message_handler(state=BotStates.WAIT_FEEDBACK)
+async def feedback_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await BotStates.DEFAULT.set()
+    await bot.send_message(message.from_user.id, "Спасибо за обратную связь. Что вы хотите сделать дальше?",
+                           reply_markup=init_main_keyboard(user_data))
+    if FEEDBACK_CHAT_ID is not None:
+        await bot.send_message(FEEDBACK_CHAT_ID, "#отзыв от @" + message.from_user.username + ":\n" + message.text)
 
 
 @dp.message_handler(commands='start', state='*')
@@ -111,119 +156,9 @@ async def show_handler(message: types.Message, state: FSMContext):
     await message.answer_photo(photo, caption=caption)
 
 
-@dp.message_handler(commands='стиль', state='*')
-async def set_style_handler(message: types.Message, state: FSMContext):
-    await BotStates.WAIT_STYLE.set()
-    styles = ''
-    for style in default_styles.items():
-        styles += str(style[0]) + '. ' + str(style[1]['name']) + '\n'
-    await bot.send_message(
-        message.chat.id,
-        f'Я могу оформить ваше фото в таком стиле:\n' + styles +
-        f'\nЧтобы выбрать стиль напишите его номер. '
-        f'Чтобы посмотреть стиль напишите команду \'/покажи\' перед номером.\n'
-        f'Если хотите использовать свою картинку, то прикрепите её к следующему сообщению вместо номера.')
-
-
-@dp.message_handler(state=BotStates.WAIT_STYLE)
-async def set_style(message: types.Message, state: FSMContext):
-    style_id = parse_style_id(message.text)
-    if style_id is None:
-        await message.answer('Не могу понять, какой стиль вы хотите задать.')
-        return
-    await state.update_data(style_file_id=style_id)
-    await BotStates.DEFAULT.set()
-    user_data = await state.get_data()
-    answer = 'Задан стиль \'' + default_styles[style_id]['name'] + '\'.\n'
-    if 'content_file_id' not in user_data:
-        answer += "Задайте фото на которое будет перенесён стиль командой '/фото'."
-    else:
-        answer += help_result_str
-    await message.answer(answer)
-
-
-@dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_STYLE)
-async def style_photo_handler(message: types.Message, state: FSMContext):
-    file = await bot.get_file(message.photo[-1].file_id)
-    await state.update_data(style_file_id=file.file_id)
-    await BotStates.DEFAULT.set()
-    user_data = await state.get_data()
-    answer = 'Задан новый стиль\n'
-    if 'content_file_id' not in user_data:
-        answer += "Задайте фото на которое будет перенесён стиль командой '/фото'."
-    else:
-        answer += help_result_str
-    await message.answer(answer)
-
-
-@dp.message_handler(commands='фото', state='*')
-async def set_content_handler(message: types.Message, state: FSMContext):
-    await BotStates.WAIT_CONTENT.set()
-    await message.answer(f'К следующему сообщению прикрепите фото на которое хотите перенести стиль.')
-
-
-@dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_CONTENT)
-async def content_photo_handler(message: types.Message, state: FSMContext):
-    file = await bot.get_file(message.photo[-1].file_id)
-    await state.update_data(content_file_id=file.file_id)
-    await BotStates.DEFAULT.set()
-    user_data = await state.get_data()
-    answer = 'Задано новое фото на которое будет перенесён стиль.\n'
-    if 'style_file_id' not in user_data:
-        answer += "Задайте стиль командой '/стиль'."
-    else:
-        answer += help_result_str
-    await message.answer(answer)
-
-
 @dp.message_handler(content_types=[types.ContentType.PHOTO])
 async def random_photo_handler(message: types.Message):
     await bot.send_message(message.chat.id, 'Принял фотографию, но не понял зачем.')
-
-
-@dp.message_handler(commands='результат', state='*')
-@dp.async_task
-async def get_result_handler(message: types.Message, state: FSMContext):
-    user_data = await state.get_data()
-    if 'content_file_id' not in user_data:
-        await message.answer("Сначала задайте фото командой '/фото'")
-        return
-    if 'style_file_id' not in user_data:
-        await message.answer("Сначала задайте стиль командой '/стиль'")
-        return
-    await BotStates.PROCESSING.set()
-    content_file = await bot.get_file(user_data['content_file_id'])
-    content_filename = 'tmp/' + user_data['content_file_id'] + '.png'
-    await content_file.download(content_filename)
-    style_filename = None
-    if user_data['style_file_id'] in default_styles:
-        style_filename = default_styles[user_data['style_file_id']]['file']
-    else:
-        style_file = await bot.get_file(user_data['style_file_id'])
-        style_filename = 'tmp/' + user_data['style_file_id'] + '.png'
-        await style_file.download(style_filename)
-    await message.answer(
-        'Обрабатываю изображения, это займёт несколько минут. Пришлю результат как только всё будет готово.')
-    result_filename = await core(content_filename, style_filename, PRETRAINED_FILENAME)
-    os.remove(content_filename)
-    if user_data['style_file_id'] not in default_styles: os.remove(style_filename)
-    await message.answer_photo(open(result_filename, 'rb'),
-                               'Обработка завершена. Вы довольны результатом? Отвечать не обязательно 🙂')
-    await BotStates.WAIT_FEEDBACK.set()
-    os.remove(result_filename)
-
-
-@dp.message_handler(state=BotStates.WAIT_FEEDBACK)
-async def feedback_handler(message: types.Message, state: FSMContext):
-    await BotStates.DEFAULT.set()
-    await message.answer("Спасибо за обратную связь.")
-    if FEEDBACK_CHAT_ID is not None:
-        await bot.send_message(FEEDBACK_CHAT_ID, "#отзыв @" + message.chat.username + ":\n" + message.text)
-
-
-@dp.message_handler(content_types=[types.ContentType.ANY], state='*')
-async def random_handler(message: types.Message, state: FSMContext):
-    await message.answer("Для общения со мной используйте команды. Просмотреть список команд: '/справка'.")
 
 
 async def on_startup(dp):
@@ -234,6 +169,90 @@ async def on_startup(dp):
 
 async def on_shutdown(dp):
     pass
+
+
+@dp.message_handler(regexp=CommandText.SET_CONTENT + "|" + CommandText.SET_ANOTHER_CONTENT, state='*')
+async def set_content_handler(message: types.Message, state: FSMContext):
+    await BotStates.WAIT_CONTENT.set()
+    await message.answer(f'К следующему сообщению прикрепите фото на которое хотите перенести стиль.',
+                         reply_markup=None)
+
+
+@dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_CONTENT)
+async def content_photo_handler(message: types.Message, state: FSMContext):
+    file = await bot.get_file(message.photo[-1].file_id)
+    await state.update_data(content_file_id=file.file_id)
+    await BotStates.DEFAULT.set()
+    user_data = await state.get_data()
+    answer = 'Задано новое фото на которое будет перенесён стиль.\nЧто вы хотите сделать дальше?'
+    await message.answer(answer, reply_markup=init_main_keyboard(user_data))
+
+
+@dp.message_handler(regexp=CommandText.DO_TRANSFER, state='*')
+async def set_content_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    if DataKeys.CONTENT_FILE_ID not in user_data:
+        await message.answer("Сначала необходимо выбрать фото.", reply_markup=init_main_keyboard(user_data))
+        return
+    await BotStates.WAIT_STYLE.set()
+    await message.answer(
+        f'Выберите стиль из представленных, '
+        f'либо пришлите в следующем сообщении изображение, которое хотите использовать в качестве стиля.',
+        reply_markup=style_kb)
+
+
+async def set_style_reply(chat_id: int, user_data: dict, answer: str):
+    if DataKeys.CONTENT_FILE_ID not in user_data:
+        answer += "Задайте фото на которое будет перенесён стиль командой '/фото'."
+        await bot.send_message(chat_id, answer, reply_markup=init_main_keyboard(user_data))
+    else:
+        await bot.send_message(chat_id, answer, reply_markup=ReplyKeyboardRemove())
+
+
+@dp.message_handler(state=BotStates.WAIT_STYLE)
+@dp.async_task
+async def set_style(message: types.Message, state: FSMContext):
+    style_id = parse_style_id(message.text)
+    if style_id is None:
+        await message.answer('Не могу понять, какой стиль вы хотите задать.')
+        return
+    await state.update_data(style_file_id=style_id)
+    await BotStates.DEFAULT.set()
+    user_data = await state.get_data()
+    answer = 'Задан стиль \'' + default_styles[style_id]['name'] + '\'.\n'
+    await set_style_reply(message.from_user.id, user_data, answer)
+    await run_processing(message, user_data)
+
+
+@dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_STYLE)
+@dp.async_task
+async def style_photo_handler(message: types.Message, state: FSMContext):
+    file = await bot.get_file(message.photo[-1].file_id)
+    await state.update_data(style_file_id=file.file_id)
+    await BotStates.DEFAULT.set()
+    user_data = await state.get_data()
+    answer = 'Задан новый стиль\n'
+    await set_style_reply(message.from_user.id, user_data, answer)
+    await run_processing(message, user_data)
+
+
+@dp.message_handler(regexp=CommandText.SHOW_STYLES, state='*')
+async def show_styles_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    for style_id, style in default_styles.items():
+        caption = style['name']
+        photo = get_photo(style_id)
+        await message.answer_photo(photo, caption=caption, reply_markup=ReplyKeyboardRemove())
+    await message.answer(
+        'Что вы хотите сделать дальше?',
+        reply_markup=init_main_keyboard(user_data))
+
+
+@dp.message_handler(content_types=[types.ContentType.ANY], state='*')
+async def random_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await message.answer("Не понял команды. Что вы хотите сделать дальше?",
+                         reply_markup=init_main_keyboard(user_data))
 
 
 if __name__ == '__main__':

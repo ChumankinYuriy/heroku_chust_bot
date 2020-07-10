@@ -32,6 +32,22 @@ class BotStates(StatesGroup):
     PROCESSING = State()    # Обрабатывает изображения.
 
 
+# Тексты команд.
+class CommandText:
+    SET_CONTENT = 'Выбрать фото'
+    SET_ANOTHER_CONTENT = 'Выбрать другое фото'
+    SET_STYLE = 'Выбрать стиль'
+    DO_TRANSFER = 'Стилизовать фото'
+    SHOW_STYLES = 'Посмотерть доступные стили'
+    SHOW_RANDOM_EXAMPLE = 'Посмотреть случайный пример'
+
+
+# Ключи в словаре данных чата.
+class DataKeys:
+    CONTENT_FILE_ID = 'content_file_id' # id файла с содержанием.
+    STYLE_FILE_ID = 'style_file_id'     # id файла со стилем.
+
+
 # Типы изображений.
 class ImageTypes(Enum):
     CONTENT = 0  # Содержание.
@@ -66,9 +82,10 @@ def parse_style_id(text):
         id стиля, если id найден в тексте.
         None если id не найден в тексте.
     """
-    match = re.match('.*([1-9][0-9]*).*', text.lower())
-    if (match is not None) and (int(match.group(1)) in default_styles):
-        return int(match.group(1))
+    for id, style in default_styles.items():  # for name, age in dictionary.iteritems():  (for Python 2.x)
+        match = re.match('.*(' + style['name'].lower() + ').*', text.lower())
+        if match is not None:
+            return id
 
 
 def parse_image_type(text):
