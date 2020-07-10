@@ -1,5 +1,8 @@
+import asyncio
 import logging
 import os
+from asyncio import sleep
+from queue import SimpleQueue
 
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher, FSMContext
@@ -27,6 +30,8 @@ WEBAPP_PORT = os.environ.get('PORT')
 WEBHOOK_HOST = os.environ['WEBHOOK_HOST'] if 'WEBHOOK_HOST' in os.environ else None
 # Абсолютный url приложения.
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+# Примерное время ожидания обработки одного фото, мин.
+WAITING_TIME = os.environ['WAITING_TIME'] if 'WAITING_TIME' in os.environ else 5
 
 # Конфигурация Приложения.
 bot = Bot(token=TOKEN)
@@ -34,25 +39,39 @@ dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 logging.basicConfig(level=logging.DEBUG)
 
-# Строки справки.
-help_str = \
-        "При работе со мной используйте команды:\n" + \
-        "* '/справка' - для просмотра справки;\n" + \
-        "* '/фото' - для задания фото на которое будет перенесён стиль;\n" + \
-        "* '/стиль' - для задания стиля;\n" + \
-        "* '/результат' - для выполнения переноса стиля;" + \
-        "* '/покажи' - для просмотра изображения, через пробел необходимо указать, что именно вы хотите увидеть."
+# Очередь вычислительных задач.
+task_queue = SimpleQueue()
+# Количество задач, которые предстоит обработать до освобождения вычислительных ресурсов.
+on_processing = [0]
 
-help_result_str = "Для переноса стиля воспользуйтесь командой '/результат'.\n" +\
-                  "Во время обработки изображения будут обрезаны до квадратных."
 
-help_print_str = "Можно просматривать фото, стиль, изображения стандартных стилей\n(пример: '/покажи фото')\n" + \
-        "Для просмотра стандартного стиля укажите его номер\n(пример: '/покажи 1')."
+async def task_queue_processing():
+    """Функция обработки вычислительных задач."""
+    while True:
+        if not task_queue.empty():
+            on_processing[0] = task_queue.qsize()
+            future, task = task_queue.get()
+            future.set_result(await task)
+        await sleep(1)
+
+# Строка с описанием бота.
+help_str = 'Вы работаете с демонтрационным ботом для переноса стиля.\n' + \
+           'Для управления используйте команды, которые отображаются ' \
+           'на виртуальной клавиатуре и следуйте инструкциям в сообщениях.'
+add_help_str = \
+           'Я могу обработать фото таким образом, чтобы стилистически оно стало похоже на другое изображение (стиль).' \
+           'Например, в качестве фото можно использовать цветы, а в качестве стиля акварельный рисунок цветов.' \
+           'В результате получатся цветы с исходного фото, но как буд-то нарисованные акварелью.' \
+           'Обычно в качестве стиля используют ' \
+           'либо картинку с содержанием похожим на исходное фото, но оформленным иначе, ' \
+           'либо красивую текстуру.\n' \
+           'Подробную информация о моей реализации смотрите на ' \
+           f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}.'
 
 
 async def run_processing(message: types.Message, user_data: dict):
     if DataKeys.CONTENT_FILE_ID not in user_data:
-        await message.answer("Сначала необходимо выбрать фото.",
+        await message.answer("Сначала необходимо выбрать фото для обработки.",
                              reply_markup=init_main_keyboard(user_data))
         return
     if DataKeys.STYLE_FILE_ID not in user_data:
@@ -70,9 +89,15 @@ async def run_processing(message: types.Message, user_data: dict):
         style_file = await bot.get_file(user_data[DataKeys.STYLE_FILE_ID])
         style_filename = 'tmp/' + user_data[DataKeys.STYLE_FILE_ID] + '.png'
         await style_file.download(style_filename)
-    await message.answer('Обрабатываю фото, это займёт несколько минут. '
-                         + 'Пришлю результат как только всё будет готово.')
-    result_filename = await core(content_filename, style_filename, PRETRAINED_FILENAME)
+    time_str = 'менее минуты' if WAITING_TIME == 0 else \
+               'около ' + str(WAITING_TIME * (on_processing[0] + 1)) + ' минут'
+    info = 'Обрабатываю фото, это займёт ' + time_str + '. Пришлю результат как только всё будет готово.'
+    await message.answer(info)
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+    task = core(content_filename, style_filename, PRETRAINED_FILENAME)
+    task_queue.put((future,task))
+    result_filename = await future
     os.remove(content_filename)
     if user_data[DataKeys.STYLE_FILE_ID] not in default_styles:
         os.remove(style_filename)
@@ -85,96 +110,37 @@ async def run_processing(message: types.Message, user_data: dict):
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state=BotStates.PROCESSING)
 async def processing(message: types.Message, state: FSMContext):
-    await message.answer('Подождите, сначала я должен обработать изображения.')
-
-
-@dp.message_handler(state=BotStates.WAIT_FEEDBACK)
-async def feedback_handler(message: types.Message, state: FSMContext):
-    user_data = await state.get_data()
-    await BotStates.DEFAULT.set()
-    await bot.send_message(message.from_user.id, "Спасибо за обратную связь. Что вы хотите сделать дальше?",
-                           reply_markup=init_main_keyboard(user_data))
-    if FEEDBACK_CHAT_ID is not None:
-        await bot.send_message(FEEDBACK_CHAT_ID, "#отзыв от @" + message.from_user.username + ":\n" + message.text)
+    await message.answer('Подождите, сначала я должен обработать фото.')
 
 
 @dp.message_handler(commands='start', state='*')
 async def start_handler(message: types.Message, state: FSMContext):
-    await BotStates.DEFAULT.set()
-    await message.answer(
-        f'Приветствую! Это демонтрационный бот для переноса стиля\n' + help_str +
-        f'Подробная информация на '
-        f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}',
-        parse_mode=types.ParseMode.HTML,
-        disable_web_page_preview=True)
-
-
-@dp.message_handler(commands='справка', state='*')
-async def help_handler(message: types.Message, state: FSMContext):
-    await BotStates.DEFAULT.set()
-    await message.answer(
-        help_str +
-        f'Подробная информация на '
-        f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}',
-        parse_mode=types.ParseMode.HTML,
-        disable_web_page_preview=True)
-
-
-@dp.message_handler(commands='покажи', state='*')
-async def show_handler(message: types.Message, state: FSMContext):
-    text = message.text.replace('/покажи', '')
     user_data = await state.get_data()
-    style_id = parse_style_id(text)
-    image_type = parse_image_type(text)
     await BotStates.DEFAULT.set()
-    if not text:
-        await message.answer(help_print_str)
-        return
-    if (style_id is None) and (image_type is None):
-        await message.answer('Не могу понять, что именно вы просите показать.')
-        return
-    photo = None
-    caption = None
-    if style_id is not None:
-        caption = default_styles[style_id]['name']
-        photo = get_photo(style_id)
-    elif image_type == ImageTypes.STYLE:
-        if 'style_file_id' not in user_data:
-            await message.answer('Сначала задайте стиль командой \'/стиль\'.')
-            return
-        caption = 'Выбранный стиль'
-        photo = get_photo(user_data['style_file_id'])
-    elif image_type == ImageTypes.CONTENT:
-        if 'content_file_id' not in user_data:
-            await message.answer('Сначала задайте фото командой \'/фото\'.')
-            return
-        caption = 'Выбранное фото'
-        photo = get_photo(user_data['content_file_id'])
-    elif image_type == ImageTypes.RESULT:
-        await message.answer('Для получения результата воспользуйтесь командой \'/результат\'.')
-        return
-    await message.answer_photo(photo, caption=caption)
+    await message.answer(
+        f'Приветствую!\n' + help_str,
+        parse_mode=types.ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=init_main_keyboard(user_data)
+    )
 
 
-@dp.message_handler(content_types=[types.ContentType.PHOTO])
-async def random_photo_handler(message: types.Message):
-    await bot.send_message(message.chat.id, 'Принял фотографию, но не понял зачем.')
-
-
-async def on_startup(dp):
-    if not os.path.isfile(PRETRAINED_FILENAME):
-        download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
-    await bot.set_webhook(WEBHOOK_URL)
-
-
-async def on_shutdown(dp):
-    pass
+@dp.message_handler(commands='help', state='*')
+async def help_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await BotStates.DEFAULT.set()
+    await message.answer(
+        help_str,
+        parse_mode=types.ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=init_main_keyboard(user_data)
+    )
 
 
 @dp.message_handler(regexp=CommandText.SET_CONTENT + "|" + CommandText.SET_ANOTHER_CONTENT, state='*')
 async def set_content_handler(message: types.Message, state: FSMContext):
     await BotStates.WAIT_CONTENT.set()
-    await message.answer(f'К следующему сообщению прикрепите фото на которое хотите перенести стиль.',
+    await message.answer(f'К следующему сообщению прикрепите фото, которое хотите обработать.',
                          reply_markup=None)
 
 
@@ -184,7 +150,7 @@ async def content_photo_handler(message: types.Message, state: FSMContext):
     await state.update_data(content_file_id=file.file_id)
     await BotStates.DEFAULT.set()
     user_data = await state.get_data()
-    answer = 'Задано новое фото на которое будет перенесён стиль.\nЧто вы хотите сделать дальше?'
+    answer = 'Задано новое фото для обработки.\nВо время обработки фото будет обрезано до квадратного.'
     await message.answer(answer, reply_markup=init_main_keyboard(user_data))
 
 
@@ -192,18 +158,19 @@ async def content_photo_handler(message: types.Message, state: FSMContext):
 async def set_content_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     if DataKeys.CONTENT_FILE_ID not in user_data:
-        await message.answer("Сначала необходимо выбрать фото.", reply_markup=init_main_keyboard(user_data))
+        await message.answer("Сначала необходимо выбрать фото для обработки.",
+                             reply_markup=init_main_keyboard(user_data))
         return
     await BotStates.WAIT_STYLE.set()
     await message.answer(
-        f'Выберите стиль из представленных, '
-        f'либо пришлите в следующем сообщении изображение, которое хотите использовать в качестве стиля.',
+        'Выберите стиль из представленных, '
+        'либо пришлите в следующем сообщении изображение, которое хотите использовать в качестве стиля.',
         reply_markup=style_kb)
 
 
 async def set_style_reply(chat_id: int, user_data: dict, answer: str):
     if DataKeys.CONTENT_FILE_ID not in user_data:
-        answer += "Задайте фото на которое будет перенесён стиль командой '/фото'."
+        answer += "Задайте фото для обработки."
         await bot.send_message(chat_id, answer, reply_markup=init_main_keyboard(user_data))
     else:
         await bot.send_message(chat_id, answer, reply_markup=ReplyKeyboardRemove())
@@ -231,7 +198,7 @@ async def style_photo_handler(message: types.Message, state: FSMContext):
     await state.update_data(style_file_id=file.file_id)
     await BotStates.DEFAULT.set()
     user_data = await state.get_data()
-    answer = 'Задан новый стиль\n'
+    answer = 'Задан новый стиль.\n'
     await set_style_reply(message.from_user.id, user_data, answer)
     await run_processing(message, user_data)
 
@@ -244,18 +211,47 @@ async def show_styles_handler(message: types.Message, state: FSMContext):
         photo = get_photo(style_id)
         await message.answer_photo(photo, caption=caption, reply_markup=ReplyKeyboardRemove())
     await message.answer(
-        'Что вы хотите сделать дальше?',
+        'Это только список стандартных стилей. '
+        'Перед обработкой вы можете выбрать в качестве стиля любое понравившееся изображение в вашем телефоне.',
         reply_markup=init_main_keyboard(user_data))
+
+
+@dp.message_handler(state=BotStates.WAIT_FEEDBACK)
+async def feedback_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await BotStates.DEFAULT.set()
+    await bot.send_message(message.from_user.id, "Спасибо за обратную связь.",
+                           reply_markup=init_main_keyboard(user_data))
+    if FEEDBACK_CHAT_ID is not None:
+        await bot.send_message(FEEDBACK_CHAT_ID, "#отзыв от @" + message.from_user.username + ":\n" + message.text)
+
+
+@dp.message_handler(content_types=[types.ContentType.PHOTO], state='*')
+async def random_photo_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await bot.send_message(message.chat.id, 'Принял фотографию, но не понял зачем.',
+                           reply_markup=init_main_keyboard(user_data))
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state='*')
 async def random_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
-    await message.answer("Не понял команды. Что вы хотите сделать дальше?",
+    await message.answer("Не понял команды.",
                          reply_markup=init_main_keyboard(user_data))
 
 
+async def on_startup(dp):
+    if not os.path.isfile(PRETRAINED_FILENAME):
+        download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
+    await bot.set_webhook(WEBHOOK_URL)
+
+
+async def on_shutdown(dp):
+    pass
+
+
 if __name__ == '__main__':
+    dp.loop.create_task(task_queue_processing())
     start_webhook(dispatcher=dp, webhook_path=WEBHOOK_PATH,
                   on_startup=on_startup, on_shutdown=on_shutdown,
                   host=WEBAPP_HOST, port=WEBAPP_PORT)

@@ -34,12 +34,12 @@ class BotStates(StatesGroup):
 
 # Тексты команд.
 class CommandText:
-    SET_CONTENT = 'Выбрать фото'
-    SET_ANOTHER_CONTENT = 'Выбрать другое фото'
-    SET_STYLE = 'Выбрать стиль'
-    DO_TRANSFER = 'Стилизовать фото'
-    SHOW_STYLES = 'Посмотерть доступные стили'
-    SHOW_RANDOM_EXAMPLE = 'Посмотреть случайный пример'
+    SET_CONTENT = 'Запомни фото для обработки'
+    SET_ANOTHER_CONTENT = 'Запомни другое фото'
+    DO_TRANSFER = 'Обработай фото'
+    SHOW_STYLES = 'Покажи стандартные стили'
+    SHOW_RANDOM_EXAMPLE = 'Покажи случайный пример'
+    #README = 'Расскажи о себе'
 
 
 # Ключи в словаре данных чата.
