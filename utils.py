@@ -11,20 +11,28 @@ from os.path import isfile, join
 PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1fAHu8nHH6c0ykQZd0EaFHnRhZENfAbh2&export=download'
 # Имя файла в котором хранится предобученная сеть.
 PRETRAINED_FILENAME = 'style_transfer.cnn'
+# Адрес по которому расположен zip архив с примерами.
+EXAMPLES_URL = 'https://drive.google.com/u/0/uc?id=1hkvqijfwePh0DcMSrP8cBdGPPLqP9yvM&export=download'
+# Имя архива с примерами.
+EXAMPLES_ZIP = 'examples.zip'
+
 # Директория с примерами
 EXAMPLES_DIR = 'examples/'
+
 # Стандартные стили.
 default_styles = {
+    4: {'name': 'Акварель', 'file': 'styles/4.jpg'},
     1: {'name': 'Кубизм', 'file': 'styles/1.jpg'},
     2: {'name': 'Импрессионизм', 'file': 'styles/2.jpg'},
     3: {'name': 'Постимпрессионизм', 'file': 'styles/3.jpg'},
-    4: {'name': 'Акварель', 'file': 'styles/4.jpg'},
-    5: {'name': 'Хохлома', 'file': 'styles/5.jpg'},
-    6: {'name': 'Гжель', 'file': 'styles/6.jpg'},
+    #5: {'name': 'Хохлома', 'file': 'styles/5.jpg'},
+    #6: {'name': 'Гжель', 'file': 'styles/6.jpg'},
     7: {'name': 'Золотые узоры', 'file': 'styles/7.jpg'},
+    12: {'name': 'Геометрия', 'file': 'styles/12.jpg'},
     8: {'name': 'Листва', 'file': 'styles/8.jpg'},
     9: {'name': 'Кора', 'file': 'styles/9.jpg'},
     10: {'name': 'Лёд', 'file': 'styles/10.jpg'},
+    11: {'name': 'Пламя', 'file': 'styles/11.jpg'}
 }
 
 
@@ -92,6 +100,7 @@ class CommandText:
     SHOW_STYLES = 'Покажи стандартные стили'
     SHOW_RANDOM_EXAMPLE = 'Покажи случайный пример'
     README = 'Расскажи о себе'
+    MY_STYLE = 'Изображение с моего телефона'
 
 
 # Ключи в словаре данных чата.

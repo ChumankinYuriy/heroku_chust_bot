@@ -14,6 +14,7 @@ for style in default_styles.items():
     else:
         prev = InlineKeyboardButton(style[1]['name'])
     i += 1
+style_kb.add(KeyboardButton(CommandText.MY_STYLE))
 
 feedback_kb = InlineKeyboardMarkup()
 feedback_kb.add(InlineKeyboardButton('Да', callback_data='feedback_btn|yes'),

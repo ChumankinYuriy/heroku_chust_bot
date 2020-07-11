@@ -13,9 +13,10 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
 from keyboards import style_kb, init_main_keyboard
-from utils import examples, ImageTypes, clear_catalog
+from utils import examples, ImageTypes, clear_catalog, EXAMPLES_DIR, EXAMPLES_URL, EXAMPLES_ZIP
 from utils import BotStates, parse_style_id, default_styles, download_file, \
     PRETRAINED_FILENAME, PRETRAINED_URL, CommandText, DataKeys
+import zipfile
 
 # Токен подключения к боту.
 TOKEN = os.environ['TOKEN'] if 'TOKEN' in os.environ else None
@@ -208,7 +209,7 @@ async def help_handler(message: types.Message, state: FSMContext):
 @dp.message_handler(regexp=CommandText.SET_CONTENT + "|" + CommandText.SET_ANOTHER_CONTENT, state='*')
 async def set_content_handler(message: types.Message, state: FSMContext):
     await BotStates.WAIT_CONTENT.set()
-    await message.answer(f'К следующему сообщению прикрепите фото, которое хотите обработать.',
+    await message.answer('К следующему сообщению прикрепите фото, которое хотите обработать.',
                          reply_markup=None)
 
 
@@ -245,9 +246,17 @@ async def set_style_reply(chat_id: int, user_data: dict, answer: str):
 @dp.message_handler(state=BotStates.WAIT_STYLE)
 @dp.async_task
 async def set_style(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    if message.text == CommandText.MY_STYLE:
+        await message.answer(
+            'К следующему сообщению прикрепите изображение, которое хотите использовать в качестве стиля.',
+            reply_markup=ReplyKeyboardRemove())
+        return
+
     style_id = parse_style_id(message.text)
     if style_id is None:
-        await message.answer('Не могу понять, какой стиль вы хотите задать.')
+        await message.answer(
+            'Не могу понять, какой стиль вы хотите задать.', reply_markup=init_main_keyboard(user_data))
         return
     await state.update_data(style_file_id=style_id)
     await BotStates.DEFAULT.set()
@@ -298,9 +307,16 @@ async def random_handler(message: types.Message, state: FSMContext):
 
 
 async def on_startup(dp):
-    clear_catalog('tmp/', lambda path: path != '.gitignore')
-    if not os.path.isfile(PRETRAINED_FILENAME):
-        download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
+    try:
+        if not os.path.isfile(PRETRAINED_FILENAME):
+            download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
+        if ('.gitignore' in os.listdir(EXAMPLES_DIR)) and (len(os.listdir(EXAMPLES_DIR)) == 1):
+            download_file(EXAMPLES_URL, EXAMPLES_ZIP)
+            with zipfile.ZipFile(EXAMPLES_ZIP, 'r') as zip_ref:
+                zip_ref.extractall(EXAMPLES_DIR)
+        clear_catalog('tmp/', lambda path: path != '.gitignore')
+    except Exception as ex:
+        logging.error('Failed while preloading: ' + str(ex))
     await bot.set_webhook(WEBHOOK_URL)
 
 
