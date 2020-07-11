@@ -3,11 +3,15 @@ import re
 
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from pip._vendor import requests
+from os import listdir
+from os.path import isfile, join
 
 # Url для загрузки предобученной сети выделения признаков.
 PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1fAHu8nHH6c0ykQZd0EaFHnRhZENfAbh2&export=download'
 # Имя файла в котором хранится предобученная сеть.
 PRETRAINED_FILENAME = 'style_transfer.cnn'
+# Директория с примерами
+EXAMPLES_DIR = 'examples/'
 # Стандартные стили.
 default_styles = {
     1: {'name': 'Кубизм', 'file': 'styles/1.jpg'},
@@ -23,13 +27,60 @@ default_styles = {
 }
 
 
+# Типы изображений.
+class ImageTypes(Enum):
+    CONTENT = 0  # Содержание.
+    STYLE = 1  # Стиль.
+    RESULT = 2  # Результат переноса стиля.
+
+
+def parse_image_type(text):
+    """
+    Получить тип изображения (см. ImageTypes) из текста.
+    :param text: str
+        Текст.
+    :return: ImageTypes
+        Тип изображения.
+    """
+    match = re.match('.*(content|style|result).*', text.lower())
+    if match is None: return None
+    type = match.group(1)
+    if type == 'content':
+        return ImageTypes.CONTENT
+    elif type == 'style':
+        return ImageTypes.STYLE
+    elif type == 'result':
+        return ImageTypes.RESULT
+
+
+# Заполнение массива с именами файлов примеров.
+example_files = [f for f in listdir(EXAMPLES_DIR) if isfile(join(EXAMPLES_DIR, f))]
+# Массив с названиями примеров.
+# {ImageTypes.CONTENT - файл содержания, ImageTypes.STYLE - файл стиля, ImageTypes.RESULT - файл результата.}
+examples = {}
+for file in example_files:
+    im_type = parse_image_type(file)
+    if im_type is None:
+        continue
+    num_match = re.findall('[1-9][0-9]*', file.lower())
+    example_id = int(num_match.pop()) if (num_match is not None) and (len(num_match) != 0) else -1
+    if example_id not in examples:
+        examples[example_id] = {}
+    examples[example_id][im_type] = EXAMPLES_DIR + file
+
+for example_id in list(examples.keys()):
+    if (ImageTypes.RESULT not in examples[example_id]) or (ImageTypes.CONTENT not in examples[example_id]) \
+            or (ImageTypes.STYLE not in examples[example_id]):
+        examples.pop(example_id)
+
+
 # Состояния бота.
 class BotStates(StatesGroup):
-    DEFAULT = State()       # Свободен.
-    WAIT_STYLE = State()    # Ожидает задание стиля.
+    DEFAULT = State()  # Свободен.
+    WAIT_STYLE = State()  # Ожидает задание стиля.
     WAIT_CONTENT = State()  # Ожидает задания содержания.
     WAIT_FEEDBACK = State()  # Ожидает отзыва пользователя.
-    PROCESSING = State()    # Обрабатывает изображения.
+    PROCESSING = State()  # Обрабатывает изображения.
 
 
 # Тексты команд.
@@ -39,20 +90,14 @@ class CommandText:
     DO_TRANSFER = 'Обработай фото'
     SHOW_STYLES = 'Покажи стандартные стили'
     SHOW_RANDOM_EXAMPLE = 'Покажи случайный пример'
-    #README = 'Расскажи о себе'
+    README = 'Расскажи о себе'
 
 
 # Ключи в словаре данных чата.
 class DataKeys:
-    CONTENT_FILE_ID = 'content_file_id' # id файла с содержанием.
-    STYLE_FILE_ID = 'style_file_id'     # id файла со стилем.
-
-
-# Типы изображений.
-class ImageTypes(Enum):
-    CONTENT = 0  # Содержание.
-    STYLE = 1    # Стиль.
-    RESULT = 2   # Результат переноса стиля.
+    CONTENT_FILE_ID = 'content_file_id'  # id файла с содержанием.
+    STYLE_FILE_ID = 'style_file_id'  # id файла со стилем.
+    ON_PROCESSING = 'on_processing' # Флаг, показывающий выполняются ли расчёты для текущего пользователя.
 
 
 def get_photo(photo_id):
@@ -83,28 +128,9 @@ def parse_style_id(text):
         None если id не найден в тексте.
     """
     for id, style in default_styles.items():  # for name, age in dictionary.iteritems():  (for Python 2.x)
-        match = re.match('.*(' + style['name'].lower() + ').*', text.lower())
+        match = re.match('^(' + style['name'].lower() + ')', text.lower())
         if match is not None:
             return id
-
-
-def parse_image_type(text):
-    """
-    Получить тип изображения (см. ImageTypes) из текста.
-    :param text: str
-        Текст.
-    :return: ImageTypes
-        Тип изображения.
-    """
-    match = re.match('.*(фото|стиль|результат).*', text.lower())
-    if match is None: return None
-    type = match.group(1)
-    if type == 'фото':
-        return ImageTypes.CONTENT
-    elif type == 'стиль':
-        return ImageTypes.STYLE
-    elif type == 'результат':
-        return ImageTypes.RESULT
 
 
 def download_file(url, dst):

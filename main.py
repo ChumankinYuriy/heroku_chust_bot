@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import random
 from asyncio import sleep
 from queue import SimpleQueue
 
@@ -11,8 +12,9 @@ from aiogram.utils.executor import start_webhook
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
-from keyboards import style_kb, init_main_keyboard, feedback_kb
-from utils import BotStates, parse_style_id, parse_image_type, default_styles, get_photo, ImageTypes, download_file, \
+from keyboards import style_kb, init_main_keyboard
+from utils import examples, ImageTypes
+from utils import BotStates, parse_style_id, default_styles, download_file, \
     PRETRAINED_FILENAME, PRETRAINED_URL, CommandText, DataKeys
 
 # Токен подключения к боту.
@@ -52,6 +54,8 @@ async def task_queue_processing():
             on_processing[0] = task_queue.qsize()
             future, task = task_queue.get()
             future.set_result(await task)
+        else:
+            on_processing[0] = 0
         await sleep(1)
 
 # Строка с описанием бота.
@@ -92,7 +96,7 @@ async def run_processing(message: types.Message, user_data: dict):
     time_str = 'менее минуты' if WAITING_TIME == 0 else \
                'около ' + str(WAITING_TIME * (on_processing[0] + 1)) + ' минут'
     info = 'Обрабатываю фото, это займёт ' + time_str + '. Пришлю результат как только всё будет готово.'
-    await message.answer(info)
+    await message.answer(info, reply_markup=init_main_keyboard(user_data))
     loop = asyncio.get_running_loop()
     future = loop.create_future()
     task = core(content_filename, style_filename, PRETRAINED_FILENAME)
@@ -101,11 +105,75 @@ async def run_processing(message: types.Message, user_data: dict):
     os.remove(content_filename)
     if user_data[DataKeys.STYLE_FILE_ID] not in default_styles:
         os.remove(style_filename)
+    await types.ChatActions.upload_photo()
+    user_data[DataKeys.ON_PROCESSING] = False
     await message.answer_photo(open(result_filename, 'rb'),
                                'Обработка завершена. Если хотите, то следующим сообщением можете оставить отзыв 🙂',
                                reply_markup=init_main_keyboard(user_data))
     await BotStates.WAIT_FEEDBACK.set()
     os.remove(result_filename)
+
+
+@dp.message_handler(regexp=CommandText.SHOW_STYLES, state='*')
+async def show_styles_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await types.ChatActions.upload_photo()
+    media = types.MediaGroup()
+    for style_id, style in default_styles.items():
+        media.attach_photo(types.InputFile(style['file']), caption=style['name'])
+    await message.answer_media_group(media)
+    await message.answer(
+        'Это только список стандартных стилей. '
+        'Перед обработкой вы можете выбрать в качестве стиля любое понравившееся изображение в вашем телефоне.',
+        reply_markup=init_main_keyboard(user_data))
+
+
+@dp.message_handler(regexp=CommandText.SHOW_RANDOM_EXAMPLE, state='*')
+async def show_example_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    if len(examples) == 0:
+        await message.answer(
+            'Извиняюсь, на сервере нет доступных примеров.',
+            reply_markup=init_main_keyboard(user_data))
+    else:
+        example = random.choice(list(examples.values()))
+        await types.ChatActions.upload_photo()
+        media = types.MediaGroup()
+        media.attach_photo(types.InputFile(example[ImageTypes.RESULT]), caption='Результат')
+        media.attach_photo(types.InputFile(example[ImageTypes.CONTENT]), caption='Фото')
+        media.attach_photo(types.InputFile(example[ImageTypes.STYLE]), caption='Стиль')
+        await message.answer_media_group(media)
+        await message.answer(
+            'Вот такой пример.',
+            reply_markup=init_main_keyboard(user_data))
+
+
+@dp.message_handler(regexp=CommandText.README, state='*')
+async def readme_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await message.answer('Я могу обработать фото таким образом, '
+                         'чтобы стилистически оно стало похоже на другое изображение (стиль).',
+                         reply_markup=ReplyKeyboardRemove())
+    await types.ChatActions.upload_photo()
+    flower_id = 4
+    if flower_id in examples:
+        media = types.MediaGroup()
+        media.attach_photo(types.InputFile(examples[flower_id][ImageTypes.CONTENT]),
+                           caption='Например, в качестве фото можно использовать цветы.')
+
+        media.attach_photo(types.InputFile(examples[flower_id][ImageTypes.STYLE]),
+                           caption='А в качестве стиля акварельный рисунок цветов.')
+        media.attach_photo(types.InputFile(examples[flower_id][ImageTypes.RESULT]),
+                           caption='В результате получатся цветы с исходного фото, '
+                                   'но как буд-то нарисованные акварелью.')
+        await message.answer_media_group(media)
+    await message.answer('Обычно в качестве стиля используют '
+                         'либо картинку с содержанием похожим на исходное фото, но оформленным иначе, '
+                         'либо красивую текстуру.\n\n'
+                         'Подробную информация о моей реализации смотрите на '
+                         f'{md.hlink("github", "https://github.com/ChumankinYuriy/heroku_chust_bot")}.',
+                         reply_markup=init_main_keyboard(user_data), disable_web_page_preview=True,
+                         parse_mode=types.ParseMode.HTML)
 
 
 @dp.message_handler(content_types=[types.ContentType.ANY], state=BotStates.PROCESSING)
@@ -171,9 +239,7 @@ async def set_content_handler(message: types.Message, state: FSMContext):
 async def set_style_reply(chat_id: int, user_data: dict, answer: str):
     if DataKeys.CONTENT_FILE_ID not in user_data:
         answer += "Задайте фото для обработки."
-        await bot.send_message(chat_id, answer, reply_markup=init_main_keyboard(user_data))
-    else:
-        await bot.send_message(chat_id, answer, reply_markup=ReplyKeyboardRemove())
+    await bot.send_message(chat_id, answer, reply_markup=init_main_keyboard(user_data))
 
 
 @dp.message_handler(state=BotStates.WAIT_STYLE)
@@ -185,10 +251,12 @@ async def set_style(message: types.Message, state: FSMContext):
         return
     await state.update_data(style_file_id=style_id)
     await BotStates.DEFAULT.set()
+    await state.update_data(on_processing=True)
     user_data = await state.get_data()
     answer = 'Задан стиль \'' + default_styles[style_id]['name'] + '\'.\n'
     await set_style_reply(message.from_user.id, user_data, answer)
     await run_processing(message, user_data)
+    await state.update_data(on_processing=False)
 
 
 @dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_STYLE)
@@ -197,23 +265,12 @@ async def style_photo_handler(message: types.Message, state: FSMContext):
     file = await bot.get_file(message.photo[-1].file_id)
     await state.update_data(style_file_id=file.file_id)
     await BotStates.DEFAULT.set()
+    await state.update_data(on_processing=True)
     user_data = await state.get_data()
     answer = 'Задан новый стиль.\n'
     await set_style_reply(message.from_user.id, user_data, answer)
     await run_processing(message, user_data)
-
-
-@dp.message_handler(regexp=CommandText.SHOW_STYLES, state='*')
-async def show_styles_handler(message: types.Message, state: FSMContext):
-    user_data = await state.get_data()
-    for style_id, style in default_styles.items():
-        caption = style['name']
-        photo = get_photo(style_id)
-        await message.answer_photo(photo, caption=caption, reply_markup=ReplyKeyboardRemove())
-    await message.answer(
-        'Это только список стандартных стилей. '
-        'Перед обработкой вы можете выбрать в качестве стиля любое понравившееся изображение в вашем телефоне.',
-        reply_markup=init_main_keyboard(user_data))
+    await state.update_data(on_processing=False)
 
 
 @dp.message_handler(state=BotStates.WAIT_FEEDBACK)
