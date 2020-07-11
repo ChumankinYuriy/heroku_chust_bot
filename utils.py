@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 import re
 
@@ -6,6 +7,7 @@ from aiogram.dispatcher.filters.state import StatesGroup, State
 from pip._vendor import requests
 import os
 from os.path import isfile, join
+import json
 
 # Url для загрузки предобученной сети выделения признаков.
 PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1fAHu8nHH6c0ykQZd0EaFHnRhZENfAbh2&export=download'
@@ -41,6 +43,55 @@ default_styles = {
 # 13 4 1
 # 7 8 10
 # 12 9 11
+
+
+# Класс для ведения статистики.
+class Statistics:
+    FILENAME = 'statistics.json'
+
+    @staticmethod
+    def create_if_not_exists():
+        if not os.path.exists(Statistics.FILENAME):
+            with open(Statistics.FILENAME, 'w') as f:
+                f.write(json.dumps({'counter': 0, 'date': datetime.now().strftime("%d.%m.%Y, %H:%M:%S")}))
+
+    @staticmethod
+    def process_request():
+        """
+        Учесть обработанный запрос.
+        :return: None
+        """
+        try:
+            Statistics.create_if_not_exists()
+            data = None
+            with open(Statistics.FILENAME, 'r') as f:
+                file_content = f.read()
+                data = json.loads(file_content)
+            with open(Statistics.FILENAME, 'w') as f:
+                data['counter'] += 1
+                f.write(json.dumps(data))
+        except Exception as ex:
+            logging.error('Fail to account statistics: ' + str(ex))
+
+    @staticmethod
+    def get():
+        """
+        Получить статистику.
+        :return: dict
+            Статистика, ключи: counter (int) - счётчик обработанных запросов,
+                               date (datetime) - дата и время начала учёта статистики.
+        """
+        try:
+            Statistics.create_if_not_exists()
+            data = None
+            with open(Statistics.FILENAME, 'r') as f:
+                file_content = f.read()
+                data = json.loads(file_content)
+            return data
+        except Exception as ex:
+            logging.error('Fail to read statistics: ' + str(ex))
+            return {'counter': -1, 'date': datetime.now().strftime("%d.%m.%Y %H:%M:%S")}
+
 
 # Типы изображений.
 class ImageTypes(Enum):
@@ -112,8 +163,8 @@ class CommandText:
 # Ключи в словаре данных чата.
 class DataKeys:
     CONTENT_FILE_ID = 'content_file_id'  # id файла с содержанием.
-    STYLE_FILE_ID = 'style_file_id'  # id файла со стилем.
-    ON_PROCESSING = 'on_processing' # Флаг, показывающий выполняются ли расчёты для текущего пользователя.
+    STYLE_FILE_ID = 'style_file_id'      # id файла со стилем.
+    ON_PROCESSING = 'on_processing'      # Флаг, показывающий выполняются ли расчёты для текущего пользователя.
 
 
 def get_photo(photo_id):

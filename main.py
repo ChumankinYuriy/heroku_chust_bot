@@ -13,7 +13,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
 from keyboards import style_kb, init_main_keyboard
-from utils import examples, ImageTypes, clear_catalog, EXAMPLES_DIR, EXAMPLES_URL, EXAMPLES_ZIP
+from utils import examples, ImageTypes, clear_catalog, EXAMPLES_DIR, EXAMPLES_URL, EXAMPLES_ZIP, Statistics
 from utils import BotStates, parse_style_id, default_styles, download_file, \
     PRETRAINED_FILENAME, PRETRAINED_URL, CommandText, DataKeys
 import zipfile
@@ -55,6 +55,7 @@ async def task_queue_processing():
             on_processing[0] = task_queue.qsize()
             future, task = task_queue.get()
             future.set_result(await task)
+            Statistics.process_request()
         else:
             on_processing[0] = 0
         await sleep(1)
@@ -120,8 +121,15 @@ async def show_styles_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     await types.ChatActions.upload_photo()
     media = types.MediaGroup()
+    counter = 0
     for style_id, style in default_styles.items():
+        # 9 картинок красиво собираются в квадрат.
+        if counter == 9:
+            await message.answer_media_group(media)
+            media = types.MediaGroup()
+            counter = 0
         media.attach_photo(types.InputFile(style['file']), caption=style['name'])
+        counter += 1
     await message.answer_media_group(media)
     await message.answer(
         'Это только список стандартных стилей. '
@@ -206,6 +214,26 @@ async def help_handler(message: types.Message, state: FSMContext):
     )
 
 
+@dp.message_handler(commands='statistics', state='*')
+async def statistics_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    await BotStates.DEFAULT.set()
+    stat = Statistics.get()
+    info = 'Начиная с ' + stat['date'] + ' я обработал ' + str(stat['counter'])
+    mod = stat['counter'] % 10
+    if mod == 1:
+        info += ' изображение.'
+    elif mod in [2, 3, 4]:
+        info += ' изображения.'
+    else:
+        info += ' изображений.'
+    await message.answer(
+        info,
+        reply_markup=init_main_keyboard(user_data)
+    )
+
+
+
 @dp.message_handler(regexp=CommandText.SET_CONTENT + "|" + CommandText.SET_ANOTHER_CONTENT, state='*')
 async def set_content_handler(message: types.Message, state: FSMContext):
     await BotStates.WAIT_CONTENT.set()
@@ -232,8 +260,7 @@ async def set_content_handler(message: types.Message, state: FSMContext):
         return
     await BotStates.WAIT_STYLE.set()
     await message.answer(
-        'Выберите стиль из представленных, '
-        'либо пришлите в следующем сообщении изображение, которое хотите использовать в качестве стиля.',
+        'Выберите стиль из представленных.',
         reply_markup=style_kb)
 
 
