@@ -21,20 +21,26 @@ EXAMPLES_DIR = 'examples/'
 
 # Стандартные стили.
 default_styles = {
-    4: {'name': 'Акварель', 'file': 'styles/4.jpg'},
     1: {'name': 'Кубизм', 'file': 'styles/1.jpg'},
     2: {'name': 'Импрессионизм', 'file': 'styles/2.jpg'},
     3: {'name': 'Постимпрессионизм', 'file': 'styles/3.jpg'},
+    4: {'name': 'Акварель', 'file': 'styles/4.jpg'},
     #5: {'name': 'Хохлома', 'file': 'styles/5.jpg'},
     #6: {'name': 'Гжель', 'file': 'styles/6.jpg'},
     7: {'name': 'Золотые узоры', 'file': 'styles/7.jpg'},
-    12: {'name': 'Геометрия', 'file': 'styles/12.jpg'},
     8: {'name': 'Листва', 'file': 'styles/8.jpg'},
     9: {'name': 'Кора', 'file': 'styles/9.jpg'},
     10: {'name': 'Лёд', 'file': 'styles/10.jpg'},
-    11: {'name': 'Пламя', 'file': 'styles/11.jpg'}
+    11: {'name': 'Пламя', 'file': 'styles/11.jpg'},
+    12: {'name': 'Геометрия', 'file': 'styles/12.jpg'},
+    13: {'name': 'Космос', 'file': 'styles/13.jpg'}
 }
 
+# Клавиатура:
+# 2 3
+# 13 4 1
+# 7 8 10
+# 12 9 11
 
 # Типы изображений.
 class ImageTypes(Enum):
