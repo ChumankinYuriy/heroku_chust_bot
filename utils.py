@@ -1,9 +1,10 @@
 from enum import Enum
 import re
 
+import logging
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from pip._vendor import requests
-from os import listdir
+import os
 from os.path import isfile, join
 
 # Url для загрузки предобученной сети выделения признаков.
@@ -54,7 +55,7 @@ def parse_image_type(text):
 
 
 # Заполнение массива с именами файлов примеров.
-example_files = [f for f in listdir(EXAMPLES_DIR) if isfile(join(EXAMPLES_DIR, f))]
+example_files = [f for f in os.listdir(EXAMPLES_DIR) if isfile(join(EXAMPLES_DIR, f))]
 # Массив с названиями примеров.
 # {ImageTypes.CONTENT - файл содержания, ImageTypes.STYLE - файл стиля, ImageTypes.RESULT - файл результата.}
 examples = {}
@@ -143,3 +144,26 @@ def download_file(url, dst):
     """
     r = requests.get(url, allow_redirects=True)
     open(dst, 'wb').write(r.content)
+
+
+def clear_catalog(src, checker):
+    """
+    Очистить в каталоге, всё кроме того, что пройдёт проверку лямбдой.
+    :param src: str
+        Зачищаемая директория.
+    :param checker: lambda
+        Лямбда, возвращает True если файл надо удалить, иначе False.
+    :return: None
+    """
+    file_list = os.listdir(src)
+    for item in file_list:
+        s = os.path.join(src, item)
+        if os.path.isdir(s):
+            clear_catalog(s)
+        else:
+            if checker(str(os.path.basename(s))):
+                try:
+                    os.remove(s)
+                except Exception as ex:
+                    logging.error('Failed to remove file: ' + str(ex))
+

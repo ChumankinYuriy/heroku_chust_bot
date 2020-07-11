@@ -13,7 +13,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
 from keyboards import style_kb, init_main_keyboard
-from utils import examples, ImageTypes
+from utils import examples, ImageTypes, clear_catalog
 from utils import BotStates, parse_style_id, default_styles, download_file, \
     PRETRAINED_FILENAME, PRETRAINED_URL, CommandText, DataKeys
 
@@ -298,6 +298,7 @@ async def random_handler(message: types.Message, state: FSMContext):
 
 
 async def on_startup(dp):
+    clear_catalog('tmp/', lambda path: path != '.gitignore')
     if not os.path.isfile(PRETRAINED_FILENAME):
         download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
     await bot.set_webhook(WEBHOOK_URL)
