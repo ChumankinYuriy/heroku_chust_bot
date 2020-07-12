@@ -13,7 +13,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from core import core
 from keyboards import style_kb, init_main_keyboard
-from utils import examples, ImageTypes, clear_catalog, EXAMPLES_DIR, EXAMPLES_URL, EXAMPLES_ZIP, Statistics
+from utils import ImageTypes, clear_catalog, EXAMPLES_DIR, EXAMPLES_URL, EXAMPLES_ZIP, Statistics, read_examples
 from utils import BotStates, parse_style_id, default_styles, download_file, \
     PRETRAINED_FILENAME, PRETRAINED_URL, CommandText, DataKeys
 import zipfile
@@ -46,6 +46,8 @@ logging.basicConfig(level=logging.DEBUG)
 task_queue = SimpleQueue()
 # Количество задач, которые предстоит обработать до освобождения вычислительных ресурсов.
 on_processing = [0]
+# Набор стандартных примеров.
+examples = {}
 
 
 async def task_queue_processing():
@@ -233,7 +235,6 @@ async def statistics_handler(message: types.Message, state: FSMContext):
     )
 
 
-
 @dp.message_handler(regexp=CommandText.SET_CONTENT + "|" + CommandText.SET_ANOTHER_CONTENT, state='*')
 async def set_content_handler(message: types.Message, state: FSMContext):
     await BotStates.WAIT_CONTENT.set()
@@ -333,22 +334,31 @@ async def random_handler(message: types.Message, state: FSMContext):
                          reply_markup=init_main_keyboard(user_data))
 
 
+def install_examples():
+    logging.debug('Trying to download and unzip ' + EXAMPLES_ZIP)
+    download_file(EXAMPLES_URL, EXAMPLES_ZIP)
+    logging.debug(EXAMPLES_ZIP + ' was downloaded')
+    with zipfile.ZipFile(EXAMPLES_ZIP, 'r') as zip_ref:
+        zip_ref.extractall(EXAMPLES_DIR)
+        logging.debug(EXAMPLES_ZIP + ' was unzipped')
+    logging.debug(EXAMPLES_ZIP + ' is OK')
+
+
 async def on_startup(dp):
-    logging.error('Startup')
+    logging.debug('Startup')
     try:
         if not os.path.isfile(PRETRAINED_FILENAME):
             logging.debug('Trying to download ' + PRETRAINED_FILENAME)
             download_file(PRETRAINED_URL, PRETRAINED_FILENAME)
             logging.debug(PRETRAINED_FILENAME + ' was downloaded')
-        logging.debug(PRETRAINED_FILENAME + 'is OK')
-        if ('.gitignore' in os.listdir(EXAMPLES_DIR)) and (len(os.listdir(EXAMPLES_DIR)) == 1):
-            logging.debug('Trying to download and unzip ' + EXAMPLES_ZIP)
-            download_file(EXAMPLES_URL, EXAMPLES_ZIP)
-            logging.debug(EXAMPLES_ZIP + ' was downloaded')
-            with zipfile.ZipFile(EXAMPLES_ZIP, 'r') as zip_ref:
-                zip_ref.extractall(EXAMPLES_DIR)
-                logging.debug(EXAMPLES_ZIP + ' was unzipped')
-            logging.debug(EXAMPLES_ZIP + ' is OK')
+        logging.debug(PRETRAINED_FILENAME + ' is OK')
+        if not os.path.exists(EXAMPLES_DIR):
+            os.mkdir(EXAMPLES_DIR)
+            install_examples()
+        elif ('.gitignore' in os.listdir(EXAMPLES_DIR)) and (len(os.listdir(EXAMPLES_DIR)) == 1):
+            install_examples()
+        logging.debug('Examples are OK')
+        examples = read_examples()
         clear_catalog('tmp/', lambda path: path != '.gitignore')
     except Exception as ex:
         logging.error('Failed while preloading: ' + str(ex))

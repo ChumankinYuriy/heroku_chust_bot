@@ -119,26 +119,32 @@ def parse_image_type(text):
         return ImageTypes.RESULT
 
 
-# Заполнение массива с именами файлов примеров.
-example_files = [f for f in os.listdir(EXAMPLES_DIR) if isfile(join(EXAMPLES_DIR, f))]
-# Массив с названиями примеров.
-# {ImageTypes.CONTENT - файл содержания, ImageTypes.STYLE - файл стиля, ImageTypes.RESULT - файл результата.}
-examples = {}
-for file in example_files:
-    im_type = parse_image_type(file)
-    if im_type is None:
-        continue
-    num_match = re.findall('[1-9][0-9]*', file.lower())
-    example_id = int(num_match.pop()) if (num_match is not None) and (len(num_match) != 0) else -1
-    if example_id not in examples:
-        examples[example_id] = {}
-    examples[example_id][im_type] = EXAMPLES_DIR + file
+def read_examples():
+    """
+    Считать набор примеров.
+    :return: dict
+        Набор примеров, ключи - типы изображений (ImageTypes), значения пути до файлов.
+    """
+    # Заполнение массива с именами файлов примеров.
+    example_files = [f for f in os.listdir(EXAMPLES_DIR) if isfile(join(EXAMPLES_DIR, f))]
+    # Массив с названиями примеров.
+    # {ImageTypes.CONTENT - файл содержания, ImageTypes.STYLE - файл стиля, ImageTypes.RESULT - файл результата.}
+    examples = {}
+    for file in example_files:
+        im_type = parse_image_type(file)
+        if im_type is None:
+            continue
+        num_match = re.findall('[1-9][0-9]*', file.lower())
+        example_id = int(num_match.pop()) if (num_match is not None) and (len(num_match) != 0) else -1
+        if example_id not in examples:
+            examples[example_id] = {}
+        examples[example_id][im_type] = EXAMPLES_DIR + file
 
-for example_id in list(examples.keys()):
-    if (ImageTypes.RESULT not in examples[example_id]) or (ImageTypes.CONTENT not in examples[example_id]) \
-            or (ImageTypes.STYLE not in examples[example_id]):
-        examples.pop(example_id)
-
+    for example_id in list(examples.keys()):
+        if (ImageTypes.RESULT not in examples[example_id]) or (ImageTypes.CONTENT not in examples[example_id]) \
+                or (ImageTypes.STYLE not in examples[example_id]):
+            examples.pop(example_id)
+    return examples
 
 # Состояния бота.
 class BotStates(StatesGroup):
