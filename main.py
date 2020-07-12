@@ -41,7 +41,6 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 logging.basicConfig(level=logging.DEBUG)
-dp.data.update
 
 # Очередь вычислительных задач.
 task_queue = SimpleQueue()
@@ -90,8 +89,14 @@ async def run_processing(message: types.Message, user_data: dict):
         style_file = await bot.get_file(user_data[DataKeys.STYLE_FILE_ID])
         style_filename = 'tmp/' + user_data[DataKeys.STYLE_FILE_ID] + '.png'
         await style_file.download(style_filename)
-    time_str = 'менее минуты' if WAITING_TIME == 0 else \
-               'около ' + str(WAITING_TIME * (on_processing[0] + 1)) + ' минут'
+    time_str = ''
+    waiting_time = WAITING_TIME * (on_processing[0] + 1)
+    if waiting_time == 0:
+        time_str = 'менее минуты'
+    elif waiting_time % 10 == 1:
+        'около ' + str(waiting_time) + ' минуты'
+    else:
+        'около ' + str(waiting_time) + ' минут'
     info = 'Обрабатываю фото, это займёт ' + time_str + '. Пришлю результат как только всё будет готово.'
     await message.answer(info, reply_markup=init_main_keyboard(user_data))
     loop = asyncio.get_running_loop()
