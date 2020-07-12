@@ -7,7 +7,7 @@ from queue import SimpleQueue
 
 from aiogram import Bot, types, md
 from aiogram.dispatcher import Dispatcher, FSMContext
-from aiogram.types import ReplyKeyboardRemove, User
+from aiogram.types import ReplyKeyboardRemove
 from aiogram.utils.executor import start_webhook
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
@@ -41,13 +41,14 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 logging.basicConfig(level=logging.DEBUG)
+dp.data.update
 
 # Очередь вычислительных задач.
 task_queue = SimpleQueue()
 # Количество задач, которые предстоит обработать до освобождения вычислительных ресурсов.
 on_processing = [0]
 # Набор стандартных примеров.
-examples = {}
+examples = [{}]
 
 
 async def task_queue_processing():
@@ -61,6 +62,7 @@ async def task_queue_processing():
         else:
             on_processing[0] = 0
         await sleep(1)
+
 
 # Строка с описанием бота.
 help_str = 'Вы работаете с демонтрационным ботом для переноса стиля.\n' + \
@@ -142,12 +144,12 @@ async def show_styles_handler(message: types.Message, state: FSMContext):
 @dp.message_handler(regexp=CommandText.SHOW_RANDOM_EXAMPLE, state='*')
 async def show_example_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
-    if len(examples) == 0:
+    if len(examples[0]) == 0:
         await message.answer(
             'Извиняюсь, на сервере нет доступных примеров.',
             reply_markup=init_main_keyboard(user_data))
     else:
-        example = random.choice(list(examples.values()))
+        example = random.choice(list(examples[0].values()))
         await types.ChatActions.upload_photo()
         media = types.MediaGroup()
         media.attach_photo(types.InputFile(example[ImageTypes.RESULT]), caption='Результат')
@@ -167,14 +169,14 @@ async def readme_handler(message: types.Message, state: FSMContext):
                          reply_markup=ReplyKeyboardRemove())
     await types.ChatActions.upload_photo()
     flower_id = 4
-    if flower_id in examples:
+    if flower_id in examples[0]:
         media = types.MediaGroup()
-        media.attach_photo(types.InputFile(examples[flower_id][ImageTypes.CONTENT]),
+        media.attach_photo(types.InputFile(examples[0][flower_id][ImageTypes.CONTENT]),
                            caption='Например, в качестве фото можно использовать цветы.')
 
-        media.attach_photo(types.InputFile(examples[flower_id][ImageTypes.STYLE]),
+        media.attach_photo(types.InputFile(examples[0][flower_id][ImageTypes.STYLE]),
                            caption='А в качестве стиля акварельный рисунок цветов.')
-        media.attach_photo(types.InputFile(examples[flower_id][ImageTypes.RESULT]),
+        media.attach_photo(types.InputFile(examples[0][flower_id][ImageTypes.RESULT]),
                            caption='В результате получатся цветы с исходного фото, '
                                    'но как буд-то нарисованные акварелью.')
         await message.answer_media_group(media)
@@ -358,7 +360,9 @@ async def on_startup(dp):
         elif ('.gitignore' in os.listdir(EXAMPLES_DIR)) and (len(os.listdir(EXAMPLES_DIR)) == 1):
             install_examples()
         logging.debug('Examples are OK')
-        examples = read_examples()
+        logging.debug('Current directory is ' + os.path.abspath(os.getcwd()))
+        examples[0] = read_examples()
+        logging.debug('Number of examples is ' + str(len(examples[0])))
         clear_catalog('tmp/', lambda path: path != '.gitignore')
     except Exception as ex:
         logging.error('Failed while preloading: ' + str(ex))

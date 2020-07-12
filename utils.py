@@ -146,6 +146,7 @@ def read_examples():
             examples.pop(example_id)
     return examples
 
+
 # Состояния бота.
 class BotStates(StatesGroup):
     DEFAULT = State()  # Свободен.
