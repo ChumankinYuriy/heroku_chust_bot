@@ -53,7 +53,7 @@ class Statistics:
     def create_if_not_exists():
         if not os.path.exists(Statistics.FILENAME):
             with open(Statistics.FILENAME, 'w') as f:
-                f.write(json.dumps({'counter': 0, 'date': datetime.now().strftime("%d.%m.%Y, %H:%M:%S")}))
+                f.write(json.dumps({'counter': 0, 'date': datetime.now().strftime("%d.%m.%Y %H:%M:%S")}))
 
     @staticmethod
     def process_request():

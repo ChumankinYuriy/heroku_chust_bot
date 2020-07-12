@@ -227,6 +227,7 @@ async def statistics_handler(message: types.Message, state: FSMContext):
         info += ' изображения.'
     else:
         info += ' изображений.'
+    info += '\nНа текущий момент длина очереди очереди на обработку равна ' + str(on_processing[0]) + '.'
     await message.answer(
         info,
         reply_markup=init_main_keyboard(user_data)
