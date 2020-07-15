@@ -296,7 +296,7 @@ async def set_style(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=[types.ContentType.PHOTO], state=BotStates.WAIT_STYLE)
-@dp.async_task
+#@dp.async_task
 async def style_photo_handler(message: types.Message, state: FSMContext):
     file = await bot.get_file(message.photo[-1].file_id)
     await state.update_data(style_file_id=file.file_id)
