@@ -54,9 +54,11 @@ async def task_queue_processing():
     """Функция обработки вычислительных задач."""
     while True:
         if not task_queue.empty():
+            logging.debug('Starting processing task.')
             on_processing[0] = task_queue.qsize()
             future, task = task_queue.get()
             future.set_result(await task)
+            logging.debug('Processing task was completed.')
             Statistics.process_request()
         else:
             on_processing[0] = 0
@@ -90,7 +92,7 @@ async def run_processing(message: types.Message, user_data: dict):
         style_filename = 'tmp/' + user_data[DataKeys.STYLE_FILE_ID] + '.png'
         await style_file.download(style_filename)
     time_str = ''
-    waiting_time = WAITING_TIME * (on_processing[0] + 1)
+    waiting_time = int(WAITING_TIME) * (on_processing[0] + 1)
     if waiting_time == 0:
         time_str = 'менее минуты'
     elif waiting_time % 10 == 1:
