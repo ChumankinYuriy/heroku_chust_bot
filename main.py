@@ -123,16 +123,28 @@ async def show_styles_handler(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     await types.ChatActions.upload_photo()
     media = types.MediaGroup()
-    counter = 0
-    for style_id, style in default_styles.items():
-        # 9 картинок красиво собираются в квадрат.
-        if counter == 9:
-            await message.answer_media_group(media)
-            media = types.MediaGroup()
-            counter = 0
-        media.attach_photo(types.InputFile(style['file']), caption=style['name'])
-        counter += 1
-    await message.answer_media_group(media)
+    # Флаг указывающий, следует ли расставить картинки стилей в определённом здесь порядке.
+    CUSTOM_ORDER = True
+    if CUSTOM_ORDER:
+        def attach(indexes):
+            for idx in indexes:
+                media.attach_photo(types.InputFile(default_styles[idx]['file']), caption=default_styles[idx]['name'])
+        attach([2,3])
+        await message.answer_media_group(media)
+        media = types.MediaGroup()
+        attach([13, 4, 1, 7, 8, 10, 12, 9, 11])
+        await message.answer_media_group(media)
+    else:
+        counter = 0
+        for style_id, style in default_styles.items():
+            # 9 картинок красиво собираются в квадрат.
+            if counter == 9:
+                await message.answer_media_group(media)
+                media = types.MediaGroup()
+                counter = 0
+            media.attach_photo(types.InputFile(style['file']), caption=style['name'])
+            counter += 1
+        await message.answer_media_group(media)
     await message.answer(
         'Это только список стандартных стилей. '
         'Перед обработкой вы можете выбрать в качестве стиля любое понравившееся изображение в вашем телефоне.',
