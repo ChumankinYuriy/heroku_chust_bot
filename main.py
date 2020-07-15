@@ -34,7 +34,7 @@ WEBHOOK_HOST = os.environ['WEBHOOK_HOST'] if 'WEBHOOK_HOST' in os.environ else N
 # Абсолютный url приложения.
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 # Примерное время ожидания обработки одного фото, мин.
-WAITING_TIME = os.environ['WAITING_TIME'] if 'WAITING_TIME' in os.environ else 5
+WAITING_TIME = int(os.environ['WAITING_TIME']) if 'WAITING_TIME' in os.environ else 5
 
 # Конфигурация Приложения.
 bot = Bot(token=TOKEN)
@@ -92,13 +92,13 @@ async def run_processing(message: types.Message, user_data: dict):
         style_filename = 'tmp/' + user_data[DataKeys.STYLE_FILE_ID] + '.png'
         await style_file.download(style_filename)
     time_str = ''
-    waiting_time = int(WAITING_TIME) * (on_processing[0] + 1)
+    waiting_time = WAITING_TIME * (on_processing[0] + 1)
     if waiting_time == 0:
         time_str = 'менее минуты'
     elif waiting_time % 10 == 1:
-        'около ' + str(waiting_time) + ' минуты'
+        time_str = 'около ' + str(waiting_time) + ' минуты'
     else:
-        'около ' + str(waiting_time) + ' минут'
+        time_str = 'около ' + str(waiting_time) + ' минут'
     info = 'Обрабатываю фото, это займёт ' + time_str + '. Пришлю результат как только всё будет готово.'
     await message.answer(info, reply_markup=init_main_keyboard(user_data))
     loop = asyncio.get_running_loop()
