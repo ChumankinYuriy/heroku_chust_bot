@@ -14,7 +14,8 @@ PRETRAINED_URL = 'https://drive.google.com/u/0/uc?id=1fAHu8nHH6c0ykQZd0EaFHnRhZE
 # Имя файла в котором хранится предобученная сеть.
 PRETRAINED_FILENAME = 'style_transfer.cnn'
 # Адрес по которому расположен zip архив с примерами.
-EXAMPLES_URL = 'https://drive.google.com/u/0/uc?id=1hkvqijfwePh0DcMSrP8cBdGPPLqP9yvM&export=download'
+EXAMPLES_URL = os.environ['EXAMPLES_URL'] if 'EXAMPLES_URL' in os.environ else \
+    'https://drive.google.com/u/0/uc?id=1hkvqijfwePh0DcMSrP8cBdGPPLqP9yvM&export=download'
 # Имя архива с примерами.
 EXAMPLES_ZIP = 'examples.zip'
 
